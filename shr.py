@@ -234,20 +234,19 @@ class ImageArrayResponse():
     @property
     def binary(self) -> bytes:
         # Return the binary for the Property Response
-        logger.info("binary %d x %d", self.Value.shape[0], self.Value.shape[1])
-        return struct.pack('<IIIIIIIIIII' + str(self.Value.shape[0] * self.Value.shape[1]) + 's',
-            1,                      # Metadata Version = 1
-            self.ErrorNumber,           # FIXME error handling
+        return struct.pack('<IIIIIIIIIII' + str(self.Value.nbytes) + 's',
+            1,                              # Metadata Version = 1
+            self.ErrorNumber,               # FIXME error handling
             self.ClientTransactionID,
             self.ServerTransactionID,
-            44,                      # DataStart FIXME for error & good
-            2,                      # ImageElementType =uint32
-            6,                      # TransmissionElementType = byte
-            self.Rank,              # Rank = 2 = bayer
-            self.Value.shape[0],    # length of column
-            self.Value.shape[1],    # length of rows
-            0,                      # 0 for 2d array
-            self.Value.tobytes(order='c') #c or f
+            44,                             # DataStart
+            2,                              # ImageElementType = 2 = uint32
+            8,                              # TransmissionElementType = 8 = uint16
+            self.Rank,                      # Rank = 2 = bayer
+            self.Value.shape[0],            # length of column
+            self.Value.shape[1],            # length of rows
+            0,                              # 0 for 2d array
+            self.Value.tobytes(order='c')   #c or f
             )
 
 # ------------------
