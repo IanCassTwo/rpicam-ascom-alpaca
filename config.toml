@@ -1,0 +1,20 @@
+title = "Alpaca Sample Driver (Rotator)"
+
+[network]
+ip_address = ''             # Any address
+port = 5555
+
+[server]
+location = 'Anywhere on Earth'  # Anything you want here
+verbose_driver_exceptions = true
+
+[device]
+can_reverse = true
+step_size = 1.0
+steps_per_sec = 6
+
+[logging]
+log_level = 'INFO'
+log_to_stdout = false
+max_size_mb = 50
+num_keep_logs = 10
