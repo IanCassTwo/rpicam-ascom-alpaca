@@ -216,7 +216,7 @@ class binx:
             # -----------------------------
             if binx != binning:
                 binning = binx                
-                config = picam2.create_still_configuration( {"size": (640, 480)},  raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
+                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2, raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
                 picam2.stop()
                 picam2.configure(config)
                 picam2.start()
@@ -768,6 +768,7 @@ def oncapturefinished(Job):
     global state
     imageReady = True
     state = CameraState.IDLE
+    logger.info("oncapturefinished")
 
 @before(PreProcessRequest(maxdev))
 class imageready:
@@ -1335,7 +1336,7 @@ class startexposure:
             with picam2.controls as controls:
                 controls.ExposureTime = int(duration * 1e6)
                 controls.AeEnable = False
-                controls.NoiseReductionMode = libcamera.controls.draft.NoiseReductionModeEnum.Off #FIXME
+                controls.NoiseReductionMode = libcamera.controls.draft.NoiseReductionModeEnum.Off
                 controls.AwbEnable = False
                 controls.AnalogueGain = gainvalue
                 controls.ColourGains = (2.0, 2.0)
@@ -1369,7 +1370,7 @@ class connected:
             # ----------------------
             if not picam2.started:
                 # FIXME hard coded HQ cam
-                config = picam2.create_still_configuration( {"size": (640, 480)},  raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
+                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
                 picam2.configure(config)
                 picam2.start()
             # ----------------------
