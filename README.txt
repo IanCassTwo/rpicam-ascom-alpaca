@@ -1,11 +1,11 @@
 # Raspberry Pi ASCOM Alpaca driver
 
-This is a very early version that's hard-coded for Raspberry Pi HQ camera. It supports binning and gain controls. It seems to work in NINA and PHD2, but not in Sharpcap. It uses binary downloads for the images rather than JSON so it should be reasonably quick.
+This is a very early version that's hard-coded for Raspberry Pi HQ camera. It supports binning and gain controls. It seems to work in NINA and PHD2, but not in Sharpcap. It also supports binary downloads for the images as well as JSON so it's reasonably quick.
 
 To get it to work, clone this repo onto your Raspberry pi and install the dependencies below.
 
-pip3 install falcon toml
-apt-get install python3-picamera2 python3-lxml python3-astropy python-rapidjson
+pip3 install falcon toml orjson
+apt-get install python3-picamera2 python3-lxml python3-astropy
 
 Then run "python app.py".
 
