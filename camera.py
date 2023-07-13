@@ -42,6 +42,10 @@ imageReady = False
 job = 0
 gainvalue = 0
 
+# FIXME Hard coded for HQ camera
+SIZE_X = 4056
+SIZE_Y = 3040
+
 # -----------
 # DEVICE INFO
 # -----------
@@ -179,7 +183,6 @@ class binx:
             return
         try:
             # ----------------------
-            # FIXME
             val = binning
             # ----------------------
             resp.text = PropertyResponse(val, req).json
@@ -213,7 +216,7 @@ class binx:
             # -----------------------------
             if binx != binning:
                 binning = binx                
-                config = picam2.create_still_configuration( {"size": (640, 480)},  raw={'format': 'SRGGB12','size': (int(4056 / binning), int(3040 / binning))})
+                config = picam2.create_still_configuration( {"size": (640, 480)},  raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
                 picam2.stop()
                 picam2.configure(config)
                 picam2.start()
@@ -233,7 +236,6 @@ class biny:
             return
         try:
             # ----------------------
-            # FIXME
             val = binning
             # ----------------------
             resp.text = PropertyResponse(val, req).json
@@ -266,7 +268,7 @@ class biny:
             # -----------------------------
             if biny != binning:
                 binning = biny                
-                config = picam2.create_still_configuration( {"size": (640, 480)},  raw={'format': 'SRGGB12','size': (int(4056 / binning), int(3040 / binning))})
+                config = picam2.create_still_configuration( {"size": (640, 480)},  raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
                 picam2.stop()
                 picam2.configure(config)
                 picam2.start()            
@@ -313,7 +315,7 @@ class cameraxsize:
         try:
             # ----------------------
             # FIXME hard coded for HQ camera for now
-            val = 4056
+            val = SIZE_X
             # ----------------------
             resp.text = PropertyResponse(val, req).json
         except Exception as ex:
@@ -721,7 +723,7 @@ class imagearray:
             imageReady = False # regardles of what happens, we've grabbed the image now
 
             # Format array
-            true_size = (int(3040 / binning), int(4056 / binning)) # FIXME hard coded
+            true_size = (int(SIZE_Y / binning), int(SIZE_X / binning)) # FIXME hard coded
             array = array[0:true_size[0], 0:true_size[1]] # trim the array to genuine resolution
             logger.info("Array shape %s", array.shape)
             array = np.transpose(array)
@@ -891,6 +893,10 @@ class numx:
                             InvalidValueException(f'NumX " + numxstr + " not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
+        if numx < 0 or numx > SIZE_X:
+            resp.text = MethodResponse(req,
+                            InvalidValueException(f'NumX " + numxstr + " is out of bounds.')).json
+            return
         try:
             # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
@@ -932,6 +938,10 @@ class numy:
                             InvalidValueException(f'NumY " + numystr + " not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
+        if numy < 0 or numy > SIZE_Y:
+            resp.text = MethodResponse(req,
+                            InvalidValueException(f'NumY " + numystr + " is out of bounds.')).json
+            return
         try:
             # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
@@ -1165,6 +1175,10 @@ class startx:
                             InvalidValueException(f'StartX " + startxstr + " not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
+        if startx < 0 or startx > SIZE_X:
+            resp.text = MethodResponse(req,
+                            InvalidValueException(f'StartX " + startxstr + " is out of bounds.')).json
+            return
         try:
             # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
@@ -1220,6 +1234,10 @@ class starty:
                             InvalidValueException(f'StartY " + startystr + " not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
+        if starty < 0 or starty > SIZE_Y:
+            resp.text = MethodResponse(req,
+                            InvalidValueException(f'StartY " + startystr + " is out of bounds.')).json
+            return
         try:
             # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
@@ -1312,7 +1330,7 @@ class startexposure:
         try:
             # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
-            logger.info("Exposure duration is %f", duration)
+            logger.info("Exposure duration is %f, gain is %d", duration, gainvalue)
 
             with picam2.controls as controls:
                 controls.ExposureTime = int(duration * 1e6)
@@ -1351,7 +1369,7 @@ class connected:
             # ----------------------
             if not picam2.started:
                 # FIXME hard coded HQ cam
-                config = picam2.create_still_configuration( {"size": (640, 480)},  raw={'format': 'SRGGB12','size': (int(4056 / binning), int(3040 / binning))})
+                config = picam2.create_still_configuration( {"size": (640, 480)},  raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
                 picam2.configure(config)
                 picam2.start()
             # ----------------------

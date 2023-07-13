@@ -5,6 +5,7 @@
 # Part of the AlpycaDevice Alpaca skeleton/template device driver
 #
 # Author:   Robert B. Denny <rdenny@dc3.com> (rbd)
+# Author:   Ian Cass <ian@wheep.co.uk>
 #
 # Python Compatibility: Requires Python 3.7 or later
 # GitHub: https://github.com/ASCOMInitiative/AlpycaDevice
@@ -60,7 +61,7 @@
 
 from threading import Lock
 from exceptions import Success
-import rapidjson
+import orjson
 from falcon import Request, Response, HTTPBadRequest
 from logging import Logger
 import struct
@@ -229,7 +230,7 @@ class ImageArrayResponse():
     @property
     def json(self) -> str:
         # Return the JSON for the Property Response"""
-        return rapidjson.dumps(self.__dict__)
+        return orjson.dumps(self.__dict__)
     
     @property
     def binary(self) -> bytes:
@@ -246,7 +247,7 @@ class ImageArrayResponse():
             self.Value.shape[0],            # length of column
             self.Value.shape[1],            # length of rows
             0,                              # 0 for 2d array
-            self.Value.tobytes(order='c')   #c or f
+            self.Value.tobytes(order='c')   # c or f
             )
 
 # ------------------
@@ -278,7 +279,7 @@ class PropertyResponse():
     @property
     def json(self) -> str:
         """Return the JSON for the Property Response"""
-        return rapidjson.dumps(self.__dict__)
+        return orjson.dumps(self.__dict__)
 
 # --------------
 # MethodResponse
@@ -311,7 +312,7 @@ class MethodResponse():
     @property
     def json(self) -> str:
         """Return the JSON for the Method Response"""
-        return rapidjson.dumps(self.__dict__)
+        return orjson.dumps(self.__dict__)
 
 
 # -------------------------------
