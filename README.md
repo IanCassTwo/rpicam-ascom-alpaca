@@ -14,10 +14,14 @@ Tested with:-
 * CCD-Ciel
 * PHD2
 
-To get it to work, clone this repo onto your Raspberry pi and install the dependencies below.
+*Note, Currently (as of 2.2) NINA always assumes RGGB bayer when it displays in the imaging tab. You should change NINA settings to force BGGR for this camera. However, regardless of the settings, the output FITS files will always be correct*
 
+To get this driver to work, clone this repo onto your Raspberry pi and install the dependencies below.
+
+```
 pip3 install falcon toml orjson
 apt-get install python3-picamera2 python3-lxml python3-astropy
+```
 
 Then run "python app.py".
 
