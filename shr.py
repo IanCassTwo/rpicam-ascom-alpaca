@@ -293,7 +293,7 @@ class MethodResponse():
         self.ClientTransactionID = int(get_request_field('ClientTransactionID', req, False, 0))
         if err.Number == 0 and not value is None:
             self.Value = value
-            logger.info(f'{req.remote_addr} <- {str(value)}')
+            logger.debug(f'{req.remote_addr} <- {str(value)}')
         self.ErrorNumber = err.Number
         self.ErrorMessage = err.Message
 

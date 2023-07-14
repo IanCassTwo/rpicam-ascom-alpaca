@@ -56,9 +56,7 @@ start_y = 0
 # DEVICE INFO
 # -----------
 # Static metadata not subject to configuration changes
-## EDIT FOR YOUR DEVICE ##
 class CameraMetadata:
-    """ Metadata describing the Camera Device. Edit for your device"""
     Name = 'Raspberry Pi Camera'
     Version = 'v0.01'
     Description = 'A Raspberry Pi Camerai using Libcamera'
@@ -68,18 +66,14 @@ class CameraMetadata:
     MaxDeviceNumber = maxdev
     InterfaceVersion = 3        # ICameraV3
 
-# --------------------
 # Camera Init
-# --------------------
 picam2 = None
 def start_camera_device(logger: logger):
     logger = logger
     global picam2
     picam2 = Picamera2()
 
-# --------------------
 # RESOURCE CONTROLLERS
-# --------------------
 
 @before(PreProcessRequest(maxdev))
 class Action:
@@ -140,17 +134,15 @@ class bayeroffsetx:
                             NotConnectedException()).json
             return
         try:
-            # ----------------------
             # https://ascom-standards.org/Help/Platform/html/P_ASCOM_DeviceInterface_ICameraV3_SensorType.htm
-            # ----------------------
-
+            #
             # FIXME Hard coded for now. HQ camera is BGGR. 
-            # If BAYERPAT exists and both Bayer offsets either are zero or don't exist, the value of BAYERPAT is used unchanged as Bayer pattern.
-            # If BAYERPAT exists, the x Bayer offset is 1 and y bayer offset is 0, a Bayer pattern of e.g. RGGB is changed to GRBG.
-            # If BAYERPAT exists, the x Bayer offset is 0 and y bayer offset is 1, a Bayer pattern of e.g. RGGB is changed to GBRG.
-            # If BAYERPAT exists and both Bayer offsets are 1, a Bayer pattern of e.g. RGGB is changed to BGGR.
-            val = 1
-            resp.text = PropertyResponse(val, req).json
+            # Bayer offsets are both zero = RGGB
+            # x Bayer offset is 1 and y bayer offset is 0, GRBG.
+            # x Bayer offset is 0 and y bayer offset is 1, GBRG.
+            # both Bayer offsets are 1, BGGR.
+            # FIXME hard coded for now. HQ camera is BGGR
+            resp.text = PropertyResponse(1, req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Bayeroffsetx failed', ex)).json
@@ -164,14 +156,8 @@ class bayeroffsety:
                             NotConnectedException()).json
             return
         try:
-            # ----------------------
-            # https://ascom-standards.org/Help/Platform/html/P_ASCOM_DeviceInterface_ICameraV3_SensorType.htm
-            # ----------------------
-
             # FIXME Hard coded for now. HQ camera is BGGR
-            val = 1
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
+            resp.text = PropertyResponse(1, req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Bayeroffsety failed', ex)).json
@@ -186,10 +172,7 @@ class binx:
                             NotConnectedException()).json
             return
         try:
-            # ----------------------
-            val = binning
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
+            resp.text = PropertyResponse(binning, req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Binx failed', ex)).json
@@ -209,17 +192,16 @@ class binx:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'BinX {binxstr} not a valid number.')).json
             return
-        ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
+        ### RANGE CHECK
         if binx < 1 or binx > 2:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'BinX {binxstr} not in range')).json
             return
         try:
-            # -----------------------------
-            ### DEVICE OPERATION(PARAM) ###
-            # -----------------------------
+            # Set device mode
             mutex.acquire()
             if binx != binning:
+                # Binning mode has changed, switch camera resolution
                 binning = binx                
                 config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2, raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
                 picam2.stop()
@@ -233,59 +215,13 @@ class binx:
             mutex.release()
 
 @before(PreProcessRequest(maxdev))
-class biny:
+class biny(binx):
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # ----------------------
-            val = binning
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Biny failed', ex)).json
+                super().on_get(req, resp, devnum)
 
     def on_put(self, req: Request, resp: Response, devnum: int):
-
-        global binning
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        binystr = get_request_field('BinY', req)      # Raises 400 bad request if missing
-        try:
-            biny = int(binystr)
-        except:
-            resp.text = MethodResponse(req,
-                            InvalidValueException(f'BinY {binystr} not a valid number.')).json
-            return
-        ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if biny < 1 or biny > 2:
-                resp.text = MethodResponse(req,
-                                InvalidValueException(f'BinY {binystr} not in range')).json
-                return
-        try:
-            # -----------------------------
-            ### DEVICE OPERATION(PARAM) ###
-            # -----------------------------
-            mutex.acquire()
-            if biny != binning:
-                binning = biny                
-                config = picam2.create_still_configuration( {"size": (640, 480)},  raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
-                picam2.stop()
-                picam2.configure(config)
-                picam2.start()            
-            resp.text = MethodResponse(req).json
-        except Exception as ex:
-            resp.text = MethodResponse(req,
-                            DriverException(0x500, 'Camera.Biny failed', ex)).json
-        finally:
-            mutex.release()
+                super().on_put(req, resp, devnum)
 
 @before(PreProcessRequest(maxdev))
 class camerastate:
@@ -305,10 +241,7 @@ class camerastate:
             # 4 CameraDownload Downloading data to PC
             # 5 CameraError Camera error condition serious enough to prevent further operations (connection fail, etc.).
             # ----------------------
-
-            val = state.value
-            logger.info("Camera state is %s", CameraState(val).name)
-            resp.text = PropertyResponse(val, req).json
+            resp.text = PropertyResponse(state.value, req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Camerastate failed', ex)).json
@@ -321,15 +254,8 @@ class cameraxsize:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            # FIXME hard coded for HQ camera for now
-            val = SIZE_X
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Cameraxsize failed', ex)).json
+        # FIXME hard coded for HQ camera for now
+        resp.text = PropertyResponse(SIZE_X, req).json
 
 @before(PreProcessRequest(maxdev))
 class cameraysize:
@@ -339,136 +265,53 @@ class cameraysize:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            # FIXME hard coded for HQ camera for now
-            val = SIZE_Y
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Cameraysize failed', ex)).json
+        # FIXME hard coded for HQ camera for now
+        resp.text = PropertyResponse(SIZE_Y, req).json
 
 @before(PreProcessRequest(maxdev))
 class canabortexposure:
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # ----------------------
-            val = True
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Canabortexposure failed', ex)).json
+        resp.text = PropertyResponse(True, req).json
 
 @before(PreProcessRequest(maxdev))
 class canasymmetricbin:
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # ----------------------
-            val = False
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Canasymmetricbin failed', ex)).json
+        resp.text = PropertyResponse(False, req).json
 
 @before(PreProcessRequest(maxdev))
 class canfastreadout:
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # ----------------------
-            # FIXME what is this? does it matter?
-            val = False
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Canfastreadout failed', ex)).json
+        resp.text = PropertyResponse(False, req).json
+
 
 @before(PreProcessRequest(maxdev))
 class cangetcoolerpower:
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # ----------------------
-            val = False
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Cangetcoolerpower failed', ex)).json
+        resp.text = PropertyResponse(False, req).json
+
 
 @before(PreProcessRequest(maxdev))
 class canpulseguide:
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # ----------------------
-            val = False
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Canpulseguide failed', ex)).json
+        resp.text = PropertyResponse(False, req).json
+
 
 @before(PreProcessRequest(maxdev))
 class cansetccdtemperature:
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # ----------------------
-            val = False
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Cansetccdtemperature failed', ex)).json
+        resp.text = PropertyResponse(False, req).json
 
 @before(PreProcessRequest(maxdev))
 class canstopexposure:
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # ----------------------
-            # We can abort but not stop successfully (it's not BULB)
-            val = False
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Canstopexposure failed', ex)).json
+        resp.text = PropertyResponse(False, req).json
 
 @before(PreProcessRequest(maxdev))
 class ccdtemperature:
@@ -476,7 +319,6 @@ class ccdtemperature:
     def on_get(self, req: Request, resp: Response, devnum: int):
         resp.text = PropertyResponse(None, req,
                         NotImplementedException()).json
-        return
 
 @before(PreProcessRequest(maxdev))
 class cooleron:
@@ -484,7 +326,6 @@ class cooleron:
     def on_get(self, req: Request, resp: Response, devnum: int):
         resp.text = PropertyResponse(None, req,
                         NotImplementedException()).json
-        return
 
     def on_put(self, req: Request, resp: Response, devnum: int):
         resp.text = PropertyResponse(None, req,
@@ -506,10 +347,8 @@ class electronsperadu:
                             NotConnectedException()).json
             return
         try:
-            # ----------------------
             # FIXME hard coded to HQ camera
             val = 0.469
-            # ----------------------
             resp.text = PropertyResponse(val, req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
@@ -524,10 +363,8 @@ class exposuremax:
                             NotConnectedException()).json
             return
         try:
-            # ----------------------
             # FIXME hard coded to HQ camera
             val = 600
-            # ----------------------
             resp.text = PropertyResponse(val, req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
@@ -542,10 +379,8 @@ class exposuremin:
                             NotConnectedException()).json
             return
         try:
-            # ----------------------
             # FIXME hard coded for HQ camera
             val = 0.00006
-            # ----------------------
             resp.text = PropertyResponse(val, req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
@@ -555,18 +390,8 @@ class exposuremin:
 class exposureresolution:
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # ----------------------
-            val = 0.0 # A value of 0.0 shall indicate that there is no minimum resolution except that imposed by the resolution of the double value itself.
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Exposureresolution failed', ex)).json
+        resp.text = PropertyResponse(0.0, req).json
+
 
 @before(PreProcessRequest(maxdev))
 class fastreadout:
@@ -605,14 +430,7 @@ class gain:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            val = gainvalue
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Gain failed', ex)).json
+        resp.text = PropertyResponse(gainvalue, req).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
         global gainvalue
@@ -627,16 +445,14 @@ class gain:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'Gain {gainstr} not a valid number.')).json
             return
-        ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
+        ### RANGE CHECK
         if g < 0 or g > 16:
                 resp.text = MethodResponse(req,
                             InvalidValueException(f'Gain {gainstr} is out of bounds.')).json
                 return
         try:
-            # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
             gainvalue = g
-            # -----------------------------
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -668,15 +484,8 @@ class gainmin:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            # FIXME hard coded to HQ camera
-            val = 0
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Gainmin failed', ex)).json
+
+        resp.text = PropertyResponse(0, req).json
 
 @before(PreProcessRequest(maxdev))
 class gains:
@@ -693,14 +502,8 @@ class hasshutter:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            val = False
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Hasshutter failed', ex)).json
+        resp.text = PropertyResponse(False, req).json
+
 
 @before(PreProcessRequest(maxdev))
 class heatsinktemperature:
@@ -718,27 +521,27 @@ class imagearray:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
+        
         if not imageReady:
             resp.text = PropertyResponse(None, req,
                             InvalidOperationException()).json
             return
+        
         try:
             try:
                 mutex.acquire()
-                logger.debug("Camera State %d", state.value)
                 array = picam2.wait(job).view(np.uint16) * (2 ** (16 - 12))
                 imageReady = False # We've grabbed the image now
             finally:
                 mutex.release()
 
-            # Resize array to correct frame size according to subframe settings
+            # Resize array to correct frame size according to max resolution and subframe settings
             array = array[start_y:start_y + num_y, start_x:start_x + num_x]
             array = np.transpose(array)
 
-            # Check to see if we support imagebytes or not
             accept = req.headers.get("ACCEPT")
             if accept is not None and 'imagebytes' in accept:
-                # BINARY
+                # ImageBytes
 
                 # Create response
                 logger.debug("Creating ImageArrayResponse")
@@ -773,7 +576,7 @@ def oncapturefinished(Job):
     global state
     state = CameraState.IDLE
     imageReady = True
-    logger.info("oncapturefinished")
+    logger.debug("oncapturefinished")
 
 @before(PreProcessRequest(maxdev))
 class imageready:
@@ -783,14 +586,9 @@ class imageready:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            val = imageReady
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Imageready failed', ex)).json
+
+        resp.text = PropertyResponse(imageReady, req).json
+
 
 @before(PreProcessRequest(maxdev))
 class ispulseguiding:
@@ -821,15 +619,9 @@ class maxadu:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            # FIXME no idea
-            val = 65535
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Maxadu failed', ex)).json
+
+         # FIXME no idea but I think this is right, although for a 12bit sensor this would probably be 4095
+        resp.text = PropertyResponse(65535, req).json
 
 @before(PreProcessRequest(maxdev))
 class maxbinx:
@@ -853,19 +645,8 @@ class maxbinx:
 class maxbiny:
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # ----------------------
-            # FIXME hard coded to HQ camera
-            val = 2
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Maxbiny failed', ex)).json
+         super().on_get(req, resp, devnum)
+
 
 @before(PreProcessRequest(maxdev))
 class numx:
@@ -875,15 +656,8 @@ class numx:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            # Subframes
-            val = num_x
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Numx failed', ex)).json
+
+        resp.text = PropertyResponse(num_x, req).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
         global num_x
@@ -904,9 +678,7 @@ class numx:
                             InvalidValueException(f'NumX {numxstr} is out of bounds.')).json
             return
         try:
-            # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
-            # -----------------------------
             num_x = nnum_x
             resp.text = MethodResponse(req).json
         except Exception as ex:
@@ -921,15 +693,7 @@ class numy:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            # subframes
-            val = num_y
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Numy failed', ex)).json
+        resp.text = PropertyResponse(num_y, req).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
         global num_y
@@ -950,9 +714,7 @@ class numy:
                             InvalidValueException(f'NumY {numystr} is out of bounds.')).json
             return
         try:
-            # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
-            # -----------------------------
             num_y = nnum_y
             resp.text = MethodResponse(req).json
         except Exception as ex:
@@ -1021,19 +783,7 @@ class pixelsizex:
 class pixelsizey:
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # ----------------------
-            # FIXME hard coded HQ camera
-            val = 1.55
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Pixelsizey failed', ex)).json
+        super().on_get(req, resp, devnum)
 
 @before(PreProcessRequest(maxdev))
 class readoutmode:
@@ -1043,14 +793,7 @@ class readoutmode:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            val = 0
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Readoutmode failed', ex)).json
+        resp.text = PropertyResponse(0, req).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
         if not picam2.started:
@@ -1064,25 +807,8 @@ class readoutmode:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'ReadoutMode {readoutmodestr} not a valid number.')).json
             return
-        ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
+        ### RANGE CHECK FIXME
         try:
-            # -----------------------------
-            ### DEVICE OPERATION(PARAM) ###
-            # -----------------------------
-            resp.text = MethodResponse(req).json
-        except Exception as ex:
-            resp.text = MethodResponse(req,
-                            DriverException(0x500, 'Camera.Readoutmode failed', ex)).json
-
-    def on_put(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # -----------------------------
-            ### DEVICE OPERATION(PARAM) ###
-            # -----------------------------
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -1096,14 +822,8 @@ class readoutmodes:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            val =  ["default"]
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Readoutmodes failed', ex)).json
+
+        resp.text = PropertyResponse(["default"], req).json
 
 @before(PreProcessRequest(maxdev))
 class sensorname:
@@ -1131,14 +851,8 @@ class sensortype:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            val = 2 # always RGGB. Actual bayer layout is described by the bayer offset property
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Sensortype failed', ex)).json
+
+        resp.text = PropertyResponse(2, req).json
 
 @before(PreProcessRequest(maxdev))
 class setccdtemperature:
@@ -1159,15 +873,7 @@ class startx:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            # subframe
-            val = start_x
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Startx failed', ex)).json
+        resp.text = PropertyResponse(start_x, req).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
         global start_x
@@ -1188,9 +894,7 @@ class startx:
                             InvalidValueException(f'StartX {startxstr} is out of bounds.')).json
             return
         try:
-            # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
-            # -----------------------------
             start_x = nstart_x
             resp.text = MethodResponse(req).json
         except Exception as ex:
@@ -1205,15 +909,8 @@ class starty:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            # ----------------------
-            # subframe
-            val = start_y
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Starty failed', ex)).json
+
+        resp.text = PropertyResponse(start_y, req).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
         global start_y
@@ -1234,9 +931,7 @@ class starty:
                             InvalidValueException(f'StartY {startystr} is out of bounds.')).json
             return
         try:
-            # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
-            # -----------------------------
             start_y = nstart_y
             resp.text = MethodResponse(req).json
         except Exception as ex:
@@ -1264,10 +959,10 @@ class abortexposure:
                             NotConnectedException()).json
             return
         try:    
-            picam2.stop_()
-            state = CameraState.IDLE
-            picam2.start()
-            # -----------------------------
+            if state == CameraState.EXPOSING:
+                picam2.stop_()
+                state = CameraState.IDLE
+                picam2.start()
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -1312,10 +1007,9 @@ class startexposure:
             return
 
         try:
-            # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
             mutex.acquire()
-            logger.info("Exposure duration is %f, gain is %d", duration, gainvalue)
+            logger.debug("Exposure duration is %f, gain is %d", duration, gainvalue)
 
             with picam2.controls as controls:
                 controls.ExposureTime = int(duration * 1e6)
@@ -1323,7 +1017,7 @@ class startexposure:
                 controls.NoiseReductionMode = libcamera.controls.draft.NoiseReductionModeEnum.Off
                 controls.AwbEnable = False
                 controls.AnalogueGain = gainvalue
-                controls.ColourGains = (2.0, 2.0)
+                #controls.ColourGains = (2.0, 2.0)
 
             job = picam2.capture_array("raw", signal_function=oncapturefinished)
             state = CameraState.EXPOSING
@@ -1382,4 +1076,3 @@ class connected:
                                 DriverException(0x500, f'{self.__class__.__name__} failed', ex)).json
             finally:
                 mutex.release()
-
