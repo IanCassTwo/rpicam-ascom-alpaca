@@ -18,8 +18,10 @@ Tested with:-
 
 To get this driver to work, clone this repo onto your Raspberry pi and install the dependencies below.
 
+```
 pip3 install falcon toml orjson
 apt-get install python3-picamera2 python3-lxml python3-astropy
+```
 
 Then run "python app.py".
 
