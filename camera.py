@@ -221,7 +221,40 @@ class biny(binx):
                 super().on_get(req, resp, devnum)
 
     def on_put(self, req: Request, resp: Response, devnum: int):
-                super().on_put(req, resp, devnum)
+     
+        global binning
+        if not picam2.started:
+            resp.text = PropertyResponse(None, req,
+                            NotConnectedException()).json
+            return
+        binxstr = get_request_field('BinY', req)      # Raises 400 bad request if missing
+        try:
+            binx = int(binxstr)
+        except:
+            resp.text = MethodResponse(req,
+                            InvalidValueException(f'BinY {binxstr} not a valid number.')).json
+            return
+        ### RANGE CHECK
+        if binx < 1 or binx > 2:
+            resp.text = MethodResponse(req,
+                            InvalidValueException(f'BinY {binxstr} not in range')).json
+            return
+        try:
+            # Set device mode
+            mutex.acquire()
+            if binx != binning:
+                # Binning mode has changed, switch camera resolution
+                binning = binx                
+                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2, raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
+                picam2.stop()
+                picam2.configure(config)
+                picam2.start()
+            resp.text = MethodResponse(req).json
+        except Exception as ex:
+            resp.text = MethodResponse(req,
+                            DriverException(0x500, 'Camera.Biny failed', ex)).json
+        finally:
+            mutex.release()
 
 @before(PreProcessRequest(maxdev))
 class camerastate:
@@ -540,7 +573,7 @@ class imagearray:
             array = np.transpose(array)
 
             accept = req.headers.get("ACCEPT")
-            if accept is not None and 'imagebytes' in accept:
+            if accept is not None and 'XXimagebytes' in accept:
                 # ImageBytes
 
                 # Create response
@@ -642,7 +675,7 @@ class maxbinx:
                             DriverException(0x500, 'Camera.Maxbinx failed', ex)).json
 
 @before(PreProcessRequest(maxdev))
-class maxbiny:
+class maxbiny(maxbinx):
 
     def on_get(self, req: Request, resp: Response, devnum: int):
          super().on_get(req, resp, devnum)
@@ -780,7 +813,7 @@ class pixelsizex:
                             DriverException(0x500, 'Camera.Pixelsizex failed', ex)).json
 
 @before(PreProcessRequest(maxdev))
-class pixelsizey:
+class pixelsizey(pixelsizex):
 
     def on_get(self, req: Request, resp: Response, devnum: int):
         super().on_get(req, resp, devnum)
