@@ -21,9 +21,11 @@ from picamera2 import Picamera2
 from camerastate import CameraState
 import libcamera
 import numpy as np
+import threading
 
 logger: Logger = None
 binning = 1
+mutex = threading.Lock()
 
 # ----------------------
 # MULTI-INSTANCE SUPPORT
@@ -142,8 +144,7 @@ class bayeroffsetx:
             # https://ascom-standards.org/Help/Platform/html/P_ASCOM_DeviceInterface_ICameraV3_SensorType.htm
             # ----------------------
 
-            # FIXME Hard coded for now. HQ camera is BGGR  
-            # FIXME does binning change this??          
+            # FIXME Hard coded for now. HQ camera is BGGR. 
             # If BAYERPAT exists and both Bayer offsets either are zero or don't exist, the value of BAYERPAT is used unchanged as Bayer pattern.
             # If BAYERPAT exists, the x Bayer offset is 1 and y bayer offset is 0, a Bayer pattern of e.g. RGGB is changed to GRBG.
             # If BAYERPAT exists, the x Bayer offset is 0 and y bayer offset is 1, a Bayer pattern of e.g. RGGB is changed to GBRG.
@@ -168,7 +169,6 @@ class bayeroffsety:
             # ----------------------
 
             # FIXME Hard coded for now. HQ camera is BGGR
-            # FIXME does binning change this??
             val = 1
             # ----------------------
             resp.text = PropertyResponse(val, req).json
@@ -218,6 +218,7 @@ class binx:
             # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
             # -----------------------------
+            mutex.acquire()
             if binx != binning:
                 binning = binx                
                 config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2, raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
@@ -228,6 +229,8 @@ class binx:
         except Exception as ex:
             resp.text = MethodResponse(req,
                             DriverException(0x500, 'Camera.Binx failed', ex)).json
+        finally:
+            mutex.release()
 
 @before(PreProcessRequest(maxdev))
 class biny:
@@ -270,6 +273,7 @@ class biny:
             # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
             # -----------------------------
+            mutex.acquire()
             if biny != binning:
                 binning = biny                
                 config = picam2.create_still_configuration( {"size": (640, 480)},  raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
@@ -280,6 +284,8 @@ class biny:
         except Exception as ex:
             resp.text = MethodResponse(req,
                             DriverException(0x500, 'Camera.Biny failed', ex)).json
+        finally:
+            mutex.release()
 
 @before(PreProcessRequest(maxdev))
 class camerastate:
@@ -336,7 +342,7 @@ class cameraysize:
         try:
             # ----------------------
             # FIXME hard coded for HQ camera for now
-            val = 3040
+            val = SIZE_Y
             # ----------------------
             resp.text = PropertyResponse(val, req).json
         except Exception as ex:
@@ -353,7 +359,6 @@ class canabortexposure:
             return
         try:
             # ----------------------
-            # FIXME - is this true? or should it be false?
             val = True
             # ----------------------
             resp.text = PropertyResponse(val, req).json
@@ -521,7 +526,7 @@ class exposuremax:
         try:
             # ----------------------
             # FIXME hard coded to HQ camera
-            val = 127
+            val = 600
             # ----------------------
             resp.text = PropertyResponse(val, req).json
         except Exception as ex:
@@ -538,7 +543,7 @@ class exposuremin:
             return
         try:
             # ----------------------
-            # FIXME guessed this one. Please fix
+            # FIXME hard coded for HQ camera
             val = 0.00006
             # ----------------------
             resp.text = PropertyResponse(val, req).json
@@ -718,11 +723,13 @@ class imagearray:
                             InvalidOperationException()).json
             return
         try:
-
-            # ----------------------
-            logger.debug("Camera State %d", state.value)
-            array = picam2.wait(job).view(np.uint16) * (2 ** (16 - 12))
-            imageReady = False # We've grabbed the image now
+            try:
+                mutex.acquire()
+                logger.debug("Camera State %d", state.value)
+                array = picam2.wait(job).view(np.uint16) * (2 ** (16 - 12))
+                imageReady = False # We've grabbed the image now
+            finally:
+                mutex.release()
 
             # Resize array to correct frame size according to subframe settings
             array = array[start_y:start_y + num_y, start_x:start_x + num_x]
@@ -749,7 +756,7 @@ class imagearray:
                 # Create response
                 logger.debug("Creating ImageArrayResponse")
                 pr = ImageArrayResponse(array, req)
-                resp.text = pr.json # FIXME try "data" to see if it works and if it's any quicker
+                resp.text = pr.json 
                 resp.content_type = 'application/json'
                 logger.debug("Created ImageArrayJsonResponse")
         except Exception as ex:
@@ -1307,6 +1314,7 @@ class startexposure:
         try:
             # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
+            mutex.acquire()
             logger.info("Exposure duration is %f, gain is %d", duration, gainvalue)
 
             with picam2.controls as controls:
@@ -1324,6 +1332,8 @@ class startexposure:
         except Exception as ex:
             resp.text = MethodResponse(req,
                             DriverException(0x500, 'Camera.Startexposure failed', ex)).json
+        finally:
+            mutex.release()
 
 @before(PreProcessRequest(maxdev))
 class stopexposure:
@@ -1342,16 +1352,34 @@ class connected:
         conn_str = get_request_field('Connected', req)
         conn = to_bool(conn_str)              # Raises 400 Bad Request if str to bool fails
 
-        try:
-            # ----------------------
-            if not picam2.started:
-                # FIXME hard coded HQ cam
-                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
-                picam2.configure(config)
-                picam2.start()
-            # ----------------------
-            resp.text = MethodResponse(req).json
-        except Exception as ex:
-            resp.text = MethodResponse(req,
-                            DriverException(0x500, f'{self.__class__.__name__} failed', ex)).json
+        # start/stop
+        if (conn):
+            try:
+                # ----------------------
+                mutex.acquire()
+                if not picam2.started:
+                    # FIXME hard coded HQ cam
+                    config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
+                    picam2.configure(config)
+                    picam2.start()
+                # ----------------------
+                resp.text = MethodResponse(req).json
+            except Exception as ex:
+                resp.text = MethodResponse(req,
+                                DriverException(0x500, f'{self.__class__.__name__} failed', ex)).json
+            finally:
+                mutex.release()
+        else:  
+            try:
+                # ----------------------
+                mutex.acquire()
+                if picam2.started:
+                    picam2.stop()
+                # ----------------------
+                resp.text = MethodResponse(req).json
+            except Exception as ex:
+                resp.text = MethodResponse(req,
+                                DriverException(0x500, f'{self.__class__.__name__} failed', ex)).json
+            finally:
+                mutex.release()
 
