@@ -200,57 +200,6 @@ class PreProcessRequest():
         self._check_request(req, params['devnum'])   # Raises to 400 error on check failure
 
 # ------------------
-# ImageArrayResponse
-# ------------------
-class ImageArrayResponse():
-    """JSON response for an Alpaca Property (GET) Request"""
-    def __init__(self, value, req: Request, err = Success()):
-        """Initialize a ``PropertyResponse`` object.
-
-        Args:
-            value:  The value of the requested property, or None if there was an
-                exception.
-            req: The Falcon Request property that was provided to the responder.
-            err: An Alpaca exception class as defined in the exceptions
-                or defaults to :py:class:`~exceptions.Success`
-
-        Notes:
-            * Bumps the ServerTransactionID value and returns it in sequence
-        """
-        self.ServerTransactionID = getNextTransId()
-        self.ClientTransactionID = int(get_request_field('ClientTransactionID', req, False, 0))  #Caseless on GET
-        if err.Number == 0 and not value is None:
-            self.Value = value
-            logger.info(f'{req.remote_addr} <- {str(value)[:50]}')
-        self.ErrorNumber = err.Number
-        self.ErrorMessage = err.Message
-        self.Type = 2
-        self.Rank = 2
-
-    @property
-    def json(self) -> str:
-        # Return the JSON for the Property Response"""
-        return orjson.dumps(self.__dict__)
-    
-    @property
-    def binary(self) -> bytes:
-        # Return the binary for the Property Response
-        return struct.pack('<IIIIIIIIIII' + str(self.Value.nbytes) + 's',
-            1,                              # Metadata Version = 1
-            self.ErrorNumber,               # FIXME error handling
-            self.ClientTransactionID,
-            self.ServerTransactionID,
-            44,                             # DataStart
-            2,                              # ImageElementType = 2 = uint32
-            8,                              # TransmissionElementType = 8 = uint16
-            self.Rank,                      # Rank = 2 = bayer
-            self.Value.shape[0],            # length of column
-            self.Value.shape[1],            # length of rows
-            0,                              # 0 for 2d array
-            self.Value.tobytes(order='c')   # c or f
-            )
-
-# ------------------
 # PropertyResponse
 # ------------------
 class PropertyResponse():
@@ -280,6 +229,46 @@ class PropertyResponse():
     def json(self) -> str:
         """Return the JSON for the Property Response"""
         return orjson.dumps(self.__dict__)
+    
+# ------------------
+# ImageArrayResponse
+# ------------------
+class ImageArrayResponse(PropertyResponse):
+    """JSON response for an Alpaca Property (GET) Request"""
+    def __init__(self, value, req: Request, err = Success()):
+        """Initialize an ``ImageArrayResponse`` object. This is a subclass of PropertyResponse
+
+        Args:
+            value:  The value of the requested property, or None if there was an
+                exception.
+            req: The Falcon Request property that was provided to the responder.
+            err: An Alpaca exception class as defined in the exceptions
+                or defaults to :py:class:`~exceptions.Success`
+
+        Notes:
+            * Bumps the ServerTransactionID value and returns it in sequence
+        """
+        super().__init__(value, req, err)
+        self.Type = 2
+        self.Rank = 2
+    
+    @property
+    def binary(self) -> bytes:
+        # Return the binary for the Property Response
+        return struct.pack('<IIIIIIIIIII' + str(self.Value.nbytes) + 's',
+            1,                              # Metadata Version = 1
+            self.ErrorNumber,               # FIXME error handling
+            self.ClientTransactionID,
+            self.ServerTransactionID,
+            44,                             # DataStart
+            2,                              # ImageElementType = 2 = uint32
+            8,                              # TransmissionElementType = 8 = uint16
+            self.Rank,                      # Rank = 2 = bayer
+            self.Value.shape[0],            # length of column
+            self.Value.shape[1],            # length of rows
+            0,                              # 0 for 2d array
+            self.Value.tobytes(order='c')   # c or f
+            )
 
 # --------------
 # MethodResponse
