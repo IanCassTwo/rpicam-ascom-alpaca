@@ -45,8 +45,10 @@ gainvalue = 0
 # FIXME Hard coded for HQ camera
 SIZE_X = 4056
 SIZE_Y = 3040
-numx = SIZE_X
-numy = SIZE_Y
+num_x = SIZE_X
+num_y = SIZE_Y
+start_x = 0
+start_y = 0
 
 # -----------
 # DEVICE INFO
@@ -724,12 +726,9 @@ class imagearray:
             #array = array.astype(np.uint32)
             imageReady = False # regardles of what happens, we've grabbed the image now
 
-            # Format array
-            true_size = (int(SIZE_Y / binning), int(SIZE_X / binning)) # FIXME hard coded
-            array = array[0:true_size[0], 0:true_size[1]] # trim the array to genuine resolution
-            logger.info("Array shape %s", array.shape)
+            # Resize array to correct frame size according to subframe settings
+            array = array[start_y:start_y + num_y, start_x:start_x + num_x]
             array = np.transpose(array)
-            logger.info("Array shape %s", array.shape)
 
             # Check to see if we support imagebytes or not
             accept = req.headers.get("ACCEPT")
@@ -744,7 +743,7 @@ class imagearray:
                 logger.debug("Created ImageArrayResponse")
 
             else:
-                # JSON - warning, this is speed optimized but it still slow!!
+                # JSON - warning, this is speed optimized but it still much slower than imagebytes!
 
                 # Convert array to a list of tuples, where each tuple is a column
                 array = list(map(tuple, array.astype(int).tolist()))
@@ -762,8 +761,9 @@ class imagearray:
 @before(PreProcessRequest(maxdev))
 class imagearrayvariant:
     def on_get(self, req: Request, resp: Response, devnum: int):
-        resp.text = PropertyResponse(None, req,
-                NotImplementedException()).json
+        # re-use the imagearray clas
+        image_array = imagearray()
+        return image_array.on_get(self, req, resp, devnum)
 
 def oncapturefinished(Job):
     global imageReady
@@ -875,8 +875,7 @@ class numx:
         try:
             # ----------------------
             # Subframes
-            # FIXME
-            val = numx
+            val = num_x
             # ----------------------
             resp.text = PropertyResponse(val, req).json
         except Exception as ex:
@@ -884,20 +883,20 @@ class numx:
                             DriverException(0x500, 'Camera.Numx failed', ex)).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
-        global numx
+        global num_x
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
         numxstr = get_request_field('NumX', req)      # Raises 400 bad request if missing
         try:
-            nnumx = int(numxstr)
+            nnum_x = int(numxstr)
         except:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'NumX " + numxstr + " not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if nnumx < 0 or nnumx > SIZE_X: # FIXME do we need to take binning into account?
+        if nnum_x < 0 or nnum_x > SIZE_X: # FIXME do we need to take binning into account?
             resp.text = MethodResponse(req,
                             InvalidValueException(f'NumX " + numxstr + " is out of bounds.')).json
             return
@@ -905,7 +904,7 @@ class numx:
             # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
             # -----------------------------
-            numx = nnumx
+            num_x = nnum_x
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -922,8 +921,7 @@ class numy:
         try:
             # ----------------------
             # subframes
-            # FIXME
-            val = numy
+            val = num_y
             # ----------------------
             resp.text = PropertyResponse(val, req).json
         except Exception as ex:
@@ -931,20 +929,20 @@ class numy:
                             DriverException(0x500, 'Camera.Numy failed', ex)).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
-        global numy
+        global num_y
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
         numystr = get_request_field('NumY', req)      # Raises 400 bad request if missing
         try:
-            nnumy = int(numystr)
+            nnum_y = int(numystr)
         except:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'NumY " + numystr + " not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if nnumy < 0 or nnumy > SIZE_Y: # FIXME do we need to take binning into account?
+        if nnum_y < 0 or nnum_y > SIZE_Y: # FIXME do we need to take binning into account?
             resp.text = MethodResponse(req,
                             InvalidValueException(f'NumY " + numystr + " is out of bounds.')).json
             return
@@ -952,7 +950,7 @@ class numy:
             # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
             # -----------------------------
-            numy = nnumy
+            num_y = nnum_y
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -1161,8 +1159,7 @@ class startx:
         try:
             # ----------------------
             # subframe
-            # FIXME
-            val = 0
+            val = start_x
             # ----------------------
             resp.text = PropertyResponse(val, req).json
         except Exception as ex:
@@ -1170,19 +1167,20 @@ class startx:
                             DriverException(0x500, 'Camera.Startx failed', ex)).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
+        global start_x
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
         startxstr = get_request_field('StartX', req)      # Raises 400 bad request if missing
         try:
-            startx = int(startxstr)
+            nstart_x = int(startxstr)
         except:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'StartX " + startxstr + " not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if startx < 0 or startx > SIZE_X:
+        if nstart_x < 0 or nstart_x > SIZE_X:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'StartX " + startxstr + " is out of bounds.')).json
             return
@@ -1190,20 +1188,7 @@ class startx:
             # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
             # -----------------------------
-            resp.text = MethodResponse(req).json
-        except Exception as ex:
-            resp.text = MethodResponse(req,
-                            DriverException(0x500, 'Camera.Startx failed', ex)).json
-
-    def on_put(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # -----------------------------
-            ### DEVICE OPERATION(PARAM) ###
-            # -----------------------------
+            start_x = nstart_x
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -1220,8 +1205,7 @@ class starty:
         try:
             # ----------------------
             # subframe
-            # FIXME
-            val = 0
+            val = start_y
             # ----------------------
             resp.text = PropertyResponse(val, req).json
         except Exception as ex:
@@ -1229,19 +1213,20 @@ class starty:
                             DriverException(0x500, 'Camera.Starty failed', ex)).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
+        global start_y
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
         startystr = get_request_field('StartY', req)      # Raises 400 bad request if missing
         try:
-            starty = int(startystr)
+            nstart_y = int(startystr)
         except:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'StartY " + startystr + " not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if starty < 0 or starty > SIZE_Y:
+        if nstart_y < 0 or nstart_y > SIZE_Y:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'StartY " + startystr + " is out of bounds.')).json
             return
@@ -1249,20 +1234,7 @@ class starty:
             # -----------------------------
             ### DEVICE OPERATION(PARAM) ###
             # -----------------------------
-            resp.text = MethodResponse(req).json
-        except Exception as ex:
-            resp.text = MethodResponse(req,
-                            DriverException(0x500, 'Camera.Starty failed', ex)).json
-
-    def on_put(self, req: Request, resp: Response, devnum: int):
-        if not picam2.started:
-            resp.text = PropertyResponse(None, req,
-                            NotConnectedException()).json
-            return
-        try:
-            # -----------------------------
-            ### DEVICE OPERATION(PARAM) ###
-            # -----------------------------
+            start_y = nstart_y
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -1328,6 +1300,7 @@ class startexposure:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'Duration " + durationstr + " not a valid number.')).json
             return
+        
         ### RANGE CHECK AS NEEDED ###
         if duration < 0 or duration > 127:
             resp.text = MethodResponse(req,
