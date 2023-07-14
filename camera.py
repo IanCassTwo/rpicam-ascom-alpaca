@@ -573,7 +573,7 @@ class imagearray:
             array = np.transpose(array)
 
             accept = req.headers.get("ACCEPT")
-            if accept is not None and 'XXimagebytes' in accept:
+            if accept is not None and 'imagebytes' in accept:
                 # ImageBytes
 
                 # Create response
