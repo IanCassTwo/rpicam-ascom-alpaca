@@ -207,12 +207,12 @@ class binx:
             binx = int(binxstr)
         except:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'BinX " + binxstr + " not a valid number.')).json
+                            InvalidValueException(f'BinX {binxstr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
         if binx < 1 or binx > 2:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'BinX " + binxstr + " not in range')).json
+                            InvalidValueException(f'BinX {binxstr} not in range')).json
             return
         try:
             # -----------------------------
@@ -259,12 +259,12 @@ class biny:
             biny = int(binystr)
         except:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'BinY " + binystr + " not a valid number.')).json
+                            InvalidValueException(f'BinY {binystr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
         if biny < 1 or biny > 2:
                 resp.text = MethodResponse(req,
-                                InvalidValueException(f'BinY " + binystr + " not in range')).json
+                                InvalidValueException(f'BinY {binystr} not in range')).json
                 return
         try:
             # -----------------------------
@@ -298,11 +298,10 @@ class camerastate:
             # 3 CameraReading CCD array is being read out (digitized)
             # 4 CameraDownload Downloading data to PC
             # 5 CameraError Camera error condition serious enough to prevent further operations (connection fail, etc.).
-            # FIXME
             # ----------------------
 
             val = state.value
-            logger.info("Camera state is %d", val)
+            logger.info("Camera state is %s", CameraState(val).name)
             resp.text = PropertyResponse(val, req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
@@ -621,12 +620,12 @@ class gain:
             g = int(gainstr)
         except:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'Gain " + gainstr + " not a valid number.')).json
+                            InvalidValueException(f'Gain {gainstr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
         if g < 0 or g > 16:
                 resp.text = MethodResponse(req,
-                            InvalidValueException(f'Gain " + gainstr + " is out of bounds.')).json
+                            InvalidValueException(f'Gain {gainstr} is out of bounds.')).json
                 return
         try:
             # -----------------------------
@@ -700,7 +699,7 @@ class hasshutter:
 
 @before(PreProcessRequest(maxdev))
 class heatsinktemperature:
-
+    # FIXME I think we can get this from image metadata. However, we're not retrieving metadata at the moment
     def on_get(self, req: Request, resp: Response, devnum: int):
         resp.text = PropertyResponse(None, req,
                 NotImplementedException()).json
@@ -723,8 +722,7 @@ class imagearray:
             # ----------------------
             logger.debug("Camera State %d", state.value)
             array = picam2.wait(job).view(np.uint16) * (2 ** (16 - 12))
-            #array = array.astype(np.uint32)
-            imageReady = False # regardles of what happens, we've grabbed the image now
+            imageReady = False # We've grabbed the image now
 
             # Resize array to correct frame size according to subframe settings
             array = array[start_y:start_y + num_y, start_x:start_x + num_x]
@@ -759,17 +757,15 @@ class imagearray:
                             DriverException(0x500, 'Camera.Imagearray failed', ex)).json
 
 @before(PreProcessRequest(maxdev))
-class imagearrayvariant:
+class imagearrayvariant(imagearray):
     def on_get(self, req: Request, resp: Response, devnum: int):
-        # re-use the imagearray clas
-        image_array = imagearray()
-        return image_array.on_get(self, req, resp, devnum)
+        super().on_get(req, resp, devnum)
 
 def oncapturefinished(Job):
     global imageReady
     global state
-    imageReady = True
     state = CameraState.IDLE
+    imageReady = True
     logger.info("oncapturefinished")
 
 @before(PreProcessRequest(maxdev))
@@ -893,12 +889,12 @@ class numx:
             nnum_x = int(numxstr)
         except:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'NumX " + numxstr + " not a valid number.')).json
+                            InvalidValueException(f'NumX {numxstr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
         if nnum_x < 0 or nnum_x > SIZE_X: # FIXME do we need to take binning into account?
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'NumX " + numxstr + " is out of bounds.')).json
+                            InvalidValueException(f'NumX {numxstr} is out of bounds.')).json
             return
         try:
             # -----------------------------
@@ -939,12 +935,12 @@ class numy:
             nnum_y = int(numystr)
         except:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'NumY " + numystr + " not a valid number.')).json
+                            InvalidValueException(f'NumY {numystr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
         if nnum_y < 0 or nnum_y > SIZE_Y: # FIXME do we need to take binning into account?
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'NumY " + numystr + " is out of bounds.')).json
+                            InvalidValueException(f'NumY {numystr} is out of bounds.')).json
             return
         try:
             # -----------------------------
@@ -1059,7 +1055,7 @@ class readoutmode:
             readoutmode = int(readoutmodestr)
         except:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'ReadoutMode " + readoutmodestr + " not a valid number.')).json
+                            InvalidValueException(f'ReadoutMode {readoutmodestr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
         try:
@@ -1177,12 +1173,12 @@ class startx:
             nstart_x = int(startxstr)
         except:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'StartX " + startxstr + " not a valid number.')).json
+                            InvalidValueException(f'StartX {startxstr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
         if nstart_x < 0 or nstart_x > SIZE_X:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'StartX " + startxstr + " is out of bounds.')).json
+                            InvalidValueException(f'StartX {startxstr} is out of bounds.')).json
             return
         try:
             # -----------------------------
@@ -1223,12 +1219,12 @@ class starty:
             nstart_y = int(startystr)
         except:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'StartY " + startystr + " not a valid number.')).json
+                            InvalidValueException(f'StartY {startystr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
         if nstart_y < 0 or nstart_y > SIZE_Y:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'StartY " + startystr + " is out of bounds.')).json
+                            InvalidValueException(f'StartY {startystr} is out of bounds.')).json
             return
         try:
             # -----------------------------
@@ -1288,6 +1284,7 @@ class startexposure:
 
         global state
         global job
+        global imageReady
 
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
@@ -1298,13 +1295,13 @@ class startexposure:
             duration = float(durationstr)
         except:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'Duration " + durationstr + " not a valid number.')).json
+                            InvalidValueException(f'Duration {durationstr} not a valid number.')).json
             return
         
         ### RANGE CHECK AS NEEDED ###
         if duration < 0 or duration > 127:
             resp.text = MethodResponse(req,
-                            InvalidValueException(f'Duration " + durationstr + " is out of bounds')).json
+                            InvalidValueException(f'Duration {durationstr} is out of bounds')).json
             return
 
         try:
