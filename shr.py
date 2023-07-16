@@ -255,20 +255,37 @@ class ImageArrayResponse(PropertyResponse):
     @property
     def binary(self) -> bytes:
         # Return the binary for the Property Response
-        return struct.pack('<IIIIIIIIIII' + str(self.Value.nbytes) + 's',
-            1,                              # Metadata Version = 1
-            self.ErrorNumber,               # FIXME error handling
-            self.ClientTransactionID,
-            self.ServerTransactionID,
-            44,                             # DataStart
-            2,                              # ImageElementType = 2 = uint32
-            8,                              # TransmissionElementType = 8 = uint16
-            self.Rank,                      # Rank = 2 = bayer
-            self.Value.shape[0],            # length of column
-            self.Value.shape[1],            # length of rows
-            0,                              # 0 for 2d array
-            self.Value.tobytes(order='c')   # c or f
-            )
+        if (self.ErrorNumber == 0):
+            return struct.pack(f"<IIIIIIIIIII{str(self.Value.nbytes)}s",
+                1,                              # Metadata Version = 1
+                self.ErrorNumber,               
+                self.ClientTransactionID,
+                self.ServerTransactionID,
+                44,                             # DataStart
+                2,                              # ImageElementType = 2 = uint32
+                8,                              # TransmissionElementType = 8 = uint16
+                self.Rank,                      # Rank = 2 = bayer
+                self.Value.shape[0],            # length of column
+                self.Value.shape[1],            # length of rows
+                0,                              # 0 for 2d array
+                self.Value.tobytes(order='c')   # c or f
+                )
+        else:
+            error_message = self.ErrorMessage.encode('utf-8')
+            return struct.pack(f"<IIIIIIIIIII{len(error_message)}s",
+                1,                              # Metadata Version = 1
+                self.ErrorNumber,               
+                self.ClientTransactionID,
+                self.ServerTransactionID,
+                44,                             # DataStart
+                0,                              # ImageElementType = 2 = uint32
+                0,                              # TransmissionElementType = 8 = uint16
+                0,                              # Rank = 2 = bayer
+                0,                              # length of column
+                0,                              # length of rows
+                0,                              # 0 for 2d array
+                error_message                   # UTF8 encoded error message
+                )
 
 # --------------
 # MethodResponse
