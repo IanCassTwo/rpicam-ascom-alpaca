@@ -37,12 +37,14 @@ mutex = threading.Lock()
 #
 maxdev = 0                      # Single instance
 
+# FIXME don't like having all these globals
 state = CameraState.IDLE
 imageReady = False
 #exposureDuration = 0
-#exposureTime = 0
+last_duration = 0
 job = 0
 gainvalue = 0
+need_restart = False
 
 # FIXME Hard coded for HQ camera
 SIZE_X = 4056
@@ -485,7 +487,9 @@ class gain:
                 return
         try:
             ### DEVICE OPERATION(PARAM) ###
-            gainvalue = g
+            if gainvalue != g:
+                gainvalue = g
+                need_restart = True
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -992,6 +996,7 @@ class abortexposure:
                             NotConnectedException()).json
             return
         try:    
+            mutex.acquire()
             if state == CameraState.EXPOSING:
                 picam2.stop_()
                 state = CameraState.IDLE
@@ -1000,6 +1005,8 @@ class abortexposure:
         except Exception as ex:
             resp.text = MethodResponse(req,
                             DriverException(0x500, 'Camera.Abortexposure failed', ex)).json
+        finally:
+            mutex.release()
 
 @before(PreProcessRequest(maxdev))
 class pulseguide:
@@ -1019,7 +1026,8 @@ class startexposure:
 
         global state
         global job
-        global imageReady
+        global need_restart
+        global last_duration
 
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
@@ -1034,23 +1042,30 @@ class startexposure:
             return
         
         ### RANGE CHECK AS NEEDED ###
-        if duration < 0 or duration > 127:
+        if duration < 0 or duration > 600:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'Duration {durationstr} is out of bounds')).json
             return
+
+        if duration != last_duration:
+            last_duration = duration
+            need_restart = True
 
         try:
             ### DEVICE OPERATION(PARAM) ###
             mutex.acquire()
             logger.debug("Exposure duration is %f, gain is %d", duration, gainvalue)
 
-            with picam2.controls as controls:
-                controls.ExposureTime = int(duration * 1e6)
-                controls.AeEnable = False
-                controls.NoiseReductionMode = libcamera.controls.draft.NoiseReductionModeEnum.Off
-                controls.AwbEnable = False
-                controls.AnalogueGain = gainvalue
-                #controls.ColourGains = (2.0, 2.0)
+            if need_restart:
+                picam2.stop_()
+                with picam2.controls as controls:
+                    controls.ExposureTime = int(duration * 1e6)
+                    controls.AeEnable = False
+                    controls.NoiseReductionMode = libcamera.controls.draft.NoiseReductionModeEnum.Off
+                    controls.AwbEnable = False
+                    controls.AnalogueGain = gainvalue
+                picam2.start()
+                need_restart = False
 
             job = picam2.capture_array("raw", signal_function=oncapturefinished)
             state = CameraState.EXPOSING
