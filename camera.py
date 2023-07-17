@@ -19,6 +19,7 @@ from shr import ImageArrayResponse, PropertyResponse, MethodResponse, PreProcess
 from exceptions import *        # Nothing but exception
 from picamera2 import Picamera2
 from camerastate import CameraState
+from sensor.SensorFactory import SensorFactory
 from state import State
 import libcamera
 import numpy as np
@@ -27,6 +28,7 @@ import threading
 logger: Logger = None
 mutex = threading.Lock()
 state = State()
+sensor = None
 
 # ----------------------
 # MULTI-INSTANCE SUPPORT
@@ -56,11 +58,18 @@ class CameraMetadata:
 picam2 = None
 def start_camera_device(logger: logger):
     logger = logger
+
+    # Set up sensor & state defaults
+    global sensor 
+    sensor = SensorFactory.get_sensor()
+    state.num_x = sensor.get_size_x()
+    state.num_y = sensor.get_size_y()
+    
+    # Initialize PiCamera2
     global picam2
     picam2 = Picamera2()
 
 # RESOURCE CONTROLLERS
-
 @before(PreProcessRequest(maxdev))
 class Action:
     def on_put(self, req: Request, resp: Response, devnum: int):
@@ -120,14 +129,8 @@ class bayeroffsetx:
                             NotConnectedException()).json
             return
         try:
-            # https://ascom-standards.org/Help/Platform/html/P_ASCOM_DeviceInterface_ICameraV3_SensorType.htm
-            #
-            # FIXME Hard coded for now. HQ camera is BGGR. 
-            # Bayer offsets are both zero = RGGB
-            # x Bayer offset is 1 and y bayer offset is 0, GRBG.
-            # x Bayer offset is 0 and y bayer offset is 1, GBRG.
-            # both Bayer offsets are 1, BGGR.
-            resp.text = PropertyResponse(1, req).json
+
+            resp.text = PropertyResponse(sensor.get_bayer_pattern().get_offset_x(), req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Bayeroffsetx failed', ex)).json
@@ -141,8 +144,7 @@ class bayeroffsety:
                             NotConnectedException()).json
             return
         try:
-            # FIXME Hard coded for now. HQ camera is BGGR
-            resp.text = PropertyResponse(1, req).json
+            resp.text = PropertyResponse(sensor.get_bayer_pattern().get_offset_y(), req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Bayeroffsety failed', ex)).json
@@ -184,13 +186,19 @@ class binx:
         try:
             # Set device mode
             mutex.acquire()
+            logger.info("acquired mutex")
             if binx != state.binning:
+                logger.info("state != binning")
                 # Binning mode has changed, switch camera resolution
                 state.binning = binx                
-                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2, raw={'format': 'SRGGB12','size': (int(state.SIZE_X / state.binning), int(state.SIZE_Y / state.binning))})
+                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
+                logger.info("New config")
                 picam2.stop()
+                logger.info("stopped")
                 picam2.configure(config)
+                logger.info("configure")
                 picam2.start()
+                logger.info("start")
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -228,7 +236,7 @@ class biny(binx):
             if binx != state.binning:
                 # Binning mode has changed, switch camera resolution
                 state.binning = binx                
-                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2, raw={'format': 'SRGGB12','size': (int(state.SIZE_X / state.binning), int(state.SIZE_Y / state.binning))})
+                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
                 picam2.stop()
                 picam2.configure(config)
                 picam2.start()
@@ -270,8 +278,7 @@ class cameraxsize:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        # FIXME hard coded for HQ camera for now
-        resp.text = PropertyResponse(state.SIZE_X, req).json
+        resp.text = PropertyResponse(sensor.get_size_x(), req).json
 
 @before(PreProcessRequest(maxdev))
 class cameraysize:
@@ -281,8 +288,7 @@ class cameraysize:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        # FIXME hard coded for HQ camera for now
-        resp.text = PropertyResponse(state.SIZE_Y, req).json
+        resp.text = PropertyResponse(sensor.get_size_y(), req).json
 
 @before(PreProcessRequest(maxdev))
 class canabortexposure:
@@ -363,9 +369,7 @@ class electronsperadu:
                             NotConnectedException()).json
             return
         try:
-            # FIXME hard coded to HQ camera
-            val = 0.469
-            resp.text = PropertyResponse(val, req).json
+            resp.text = PropertyResponse(sensor.get_electrons_per_adu(), req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Electronsperadu failed', ex)).json
@@ -379,9 +383,7 @@ class exposuremax:
                             NotConnectedException()).json
             return
         try:
-            # FIXME hard coded to HQ camera
-            val = 600
-            resp.text = PropertyResponse(val, req).json
+            resp.text = PropertyResponse(sensor.get_max_exposure(), req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Exposuremax failed', ex)).json
@@ -395,9 +397,7 @@ class exposuremin:
                             NotConnectedException()).json
             return
         try:
-            # FIXME hard coded for HQ camera
-            val = 0.00006
-            resp.text = PropertyResponse(val, req).json
+            resp.text = PropertyResponse(sensor.get_min_exposure(), req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Exposuremin failed', ex)).json
@@ -429,11 +429,7 @@ class fullwellcapacity:
                             NotConnectedException()).json
             return
         try:
-            # ----------------------
-            # FIXME hard coded HQ camera
-            val = 8180
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
+            resp.text = PropertyResponse(sensor.get_full_well_capacity(), req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Fullwellcapacity failed', ex)).json
@@ -469,7 +465,7 @@ class gain:
             ### DEVICE OPERATION(PARAM) ###
             if state.gainvalue != g:
                 state.gainvalue = g
-                need_restart = True
+                state.need_restart = True
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -484,11 +480,7 @@ class gainmax:
                             NotConnectedException()).json
             return
         try:
-            # ----------------------
-            # FIXME hard coded to HQ camera
-            val = 16
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
+            resp.text = PropertyResponse(sensor.get_max_gain(), req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Gainmax failed', ex)).json
@@ -646,11 +638,7 @@ class maxbinx:
                             NotConnectedException()).json
             return
         try:
-            # ----------------------
-            # FIXME hard coded to HQ camera
-            val = 2
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
+            resp.text = PropertyResponse(sensor.get_max_binning(), req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Maxbinx failed', ex)).json
@@ -686,7 +674,7 @@ class numx:
                             InvalidValueException(f'NumX {numxstr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if nnum_x < 0 or nnum_x > state.SIZE_X: # FIXME do we need to take binning into account?
+        if nnum_x < 0 or nnum_x > sensor.get_size_x(): # FIXME do we need to take binning into account?
             resp.text = MethodResponse(req,
                             InvalidValueException(f'NumX {numxstr} is out of bounds.')).json
             return
@@ -721,7 +709,7 @@ class numy:
                             InvalidValueException(f'NumY {numystr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if nnum_y < 0 or nnum_y > state.SIZE_Y: # FIXME do we need to take binning into account?
+        if nnum_y < 0 or nnum_y > sensor.get_size_y(): # FIXME do we need to take binning into account?
             resp.text = MethodResponse(req,
                             InvalidValueException(f'NumY {numystr} is out of bounds.')).json
             return
@@ -782,11 +770,7 @@ class pixelsizex:
                             NotConnectedException()).json
             return
         try:
-            # ----------------------
-            # FIXME hard coded HQ camera
-            val = 1.55
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
+            resp.text = PropertyResponse(sensor.get_pixel_size(), req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Pixelsizex failed', ex)).json
@@ -846,11 +830,7 @@ class sensorname:
                             NotConnectedException()).json
             return
         try:
-            # ----------------------
-            # FIXME hard coded HQ camera
-            val = "IMX477"
-            # ----------------------
-            resp.text = PropertyResponse(val, req).json
+            resp.text = PropertyResponse(sensor.get_name(), req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Sensorname failed', ex)).json
@@ -863,7 +843,7 @@ class sensortype:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-
+        # SensorType is always 2 = RGGB bayered images. The actual bayer pattern is specified in the bayer offset properties
         resp.text = PropertyResponse(2, req).json
 
 @before(PreProcessRequest(maxdev))
@@ -900,7 +880,7 @@ class startx:
                             InvalidValueException(f'StartX {startxstr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if nstart_x < 0 or nstart_x > state.SIZE_X:
+        if nstart_x < 0 or nstart_x > sensor.get_size_x():
             resp.text = MethodResponse(req,
                             InvalidValueException(f'StartX {startxstr} is out of bounds.')).json
             return
@@ -936,7 +916,7 @@ class starty:
                             InvalidValueException(f'StartY {startystr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if nstart_y < 0 or nstart_y > state.SIZE_Y:
+        if nstart_y < 0 or nstart_y > sensor.get_size_y():
             resp.text = MethodResponse(req,
                             InvalidValueException(f'StartY {startystr} is out of bounds.')).json
             return
@@ -1067,8 +1047,7 @@ class connected:
                 # ----------------------
                 mutex.acquire()
                 if not picam2.started:
-                    # FIXME hard coded HQ cam
-                    config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': 'SRGGB12','size': (int(state.SIZE_X / state.binning), int(state.SIZE_Y / state.binning))})
+                    config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
                     picam2.configure(config)
                     picam2.start()
                 # ----------------------

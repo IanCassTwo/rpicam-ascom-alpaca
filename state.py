@@ -41,10 +41,8 @@ class State:
                 self.job = 0
                 self.gainvalue = 0
                 self.need_restart = False
-                self.SIZE_X = 4056 # FIXME Move this to a camera capabilities class
-                self.SIZE_Y = 3040 # FIXME Move this to a camera capabilities class
-                self.num_x = self.SIZE_X
-                self.num_y = self.SIZE_Y
+                self.num_x = None
+                self.num_y = None
                 self.start_x = 0
                 self.start_y = 0
                 self.binning = 1
