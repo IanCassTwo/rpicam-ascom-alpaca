@@ -19,13 +19,14 @@ from shr import ImageArrayResponse, PropertyResponse, MethodResponse, PreProcess
 from exceptions import *        # Nothing but exception
 from picamera2 import Picamera2
 from camerastate import CameraState
+from state import State
 import libcamera
 import numpy as np
 import threading
 
 logger: Logger = None
-binning = 1
 mutex = threading.Lock()
+state = State()
 
 # ----------------------
 # MULTI-INSTANCE SUPPORT
@@ -36,23 +37,6 @@ mutex = threading.Lock()
 # set to 0 for the simple case of controlling only one instance of this device type.
 #
 maxdev = 0                      # Single instance
-
-# FIXME don't like having all these globals
-state = CameraState.IDLE
-imageReady = False
-#exposureDuration = 0
-last_duration = 0
-job = 0
-gainvalue = 0
-need_restart = False
-
-# FIXME Hard coded for HQ camera
-SIZE_X = 4056
-SIZE_Y = 3040
-num_x = SIZE_X
-num_y = SIZE_Y
-start_x = 0
-start_y = 0
 
 # -----------
 # DEVICE INFO
@@ -143,7 +127,6 @@ class bayeroffsetx:
             # x Bayer offset is 1 and y bayer offset is 0, GRBG.
             # x Bayer offset is 0 and y bayer offset is 1, GBRG.
             # both Bayer offsets are 1, BGGR.
-            # FIXME hard coded for now. HQ camera is BGGR
             resp.text = PropertyResponse(1, req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
@@ -173,8 +156,8 @@ class binx:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            resp.text = PropertyResponse(binning, req).json
+        try:            
+            resp.text = PropertyResponse(state.binning, req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Binx failed', ex)).json
@@ -182,7 +165,6 @@ class binx:
 
     def on_put(self, req: Request, resp: Response, devnum: int):
      
-        global binning
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
@@ -202,10 +184,10 @@ class binx:
         try:
             # Set device mode
             mutex.acquire()
-            if binx != binning:
+            if binx != state.binning:
                 # Binning mode has changed, switch camera resolution
-                binning = binx                
-                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2, raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
+                state.binning = binx                
+                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2, raw={'format': 'SRGGB12','size': (int(state.SIZE_X / state.binning), int(state.SIZE_Y / state.binning))})
                 picam2.stop()
                 picam2.configure(config)
                 picam2.start()
@@ -224,7 +206,6 @@ class biny(binx):
 
     def on_put(self, req: Request, resp: Response, devnum: int):
      
-        global binning
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
@@ -244,10 +225,10 @@ class biny(binx):
         try:
             # Set device mode
             mutex.acquire()
-            if binx != binning:
+            if binx != state.binning:
                 # Binning mode has changed, switch camera resolution
-                binning = binx                
-                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2, raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
+                state.binning = binx                
+                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2, raw={'format': 'SRGGB12','size': (int(state.SIZE_X / state.binning), int(state.SIZE_Y / state.binning))})
                 picam2.stop()
                 picam2.configure(config)
                 picam2.start()
@@ -276,7 +257,7 @@ class camerastate:
             # 4 CameraDownload Downloading data to PC
             # 5 CameraError Camera error condition serious enough to prevent further operations (connection fail, etc.).
             # ----------------------
-            resp.text = PropertyResponse(state.value, req).json
+            resp.text = PropertyResponse(state.camerastate.value, req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Camerastate failed', ex)).json
@@ -290,7 +271,7 @@ class cameraxsize:
                             NotConnectedException()).json
             return
         # FIXME hard coded for HQ camera for now
-        resp.text = PropertyResponse(SIZE_X, req).json
+        resp.text = PropertyResponse(state.SIZE_X, req).json
 
 @before(PreProcessRequest(maxdev))
 class cameraysize:
@@ -301,7 +282,7 @@ class cameraysize:
                             NotConnectedException()).json
             return
         # FIXME hard coded for HQ camera for now
-        resp.text = PropertyResponse(SIZE_Y, req).json
+        resp.text = PropertyResponse(state.SIZE_Y, req).json
 
 @before(PreProcessRequest(maxdev))
 class canabortexposure:
@@ -465,10 +446,9 @@ class gain:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        resp.text = PropertyResponse(gainvalue, req).json
+        resp.text = PropertyResponse(state.gainvalue, req).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
-        global gainvalue
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
@@ -487,8 +467,8 @@ class gain:
                 return
         try:
             ### DEVICE OPERATION(PARAM) ###
-            if gainvalue != g:
-                gainvalue = g
+            if state.gainvalue != g:
+                state.gainvalue = g
                 need_restart = True
             resp.text = MethodResponse(req).json
         except Exception as ex:
@@ -553,13 +533,12 @@ class heatsinktemperature:
 class imagearray:
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-        global imageReady
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
         
-        if not imageReady:
+        if not state.imageReady:
             resp.text = PropertyResponse(None, req,
                             InvalidOperationException()).json
             return
@@ -567,13 +546,13 @@ class imagearray:
         try:
             try:
                 mutex.acquire()
-                array = picam2.wait(job).view(np.uint16) * (2 ** (16 - 12))
-                imageReady = False # We've grabbed the image now
+                array = picam2.wait(state.job).view(np.uint16) * (2 ** (16 - 12))
+                state.imageReady = False # We've grabbed the image now
             finally:
                 mutex.release()
 
             # Resize array to correct frame size according to max resolution and subframe settings
-            array = array[start_y:start_y + num_y, start_x:start_x + num_x]
+            array = array[state.start_y:state.start_y + state.num_y, state.start_x:state.start_x + state.num_x]
             array = np.transpose(array)
 
             accept = req.headers.get("ACCEPT")
@@ -609,10 +588,8 @@ class imagearrayvariant(imagearray):
         super().on_get(req, resp, devnum)
 
 def oncapturefinished(Job):
-    global imageReady
-    global state
-    state = CameraState.IDLE
-    imageReady = True
+    state.camerastate = CameraState.IDLE
+    state.imageReady = True
     logger.debug("oncapturefinished")
 
 @before(PreProcessRequest(maxdev))
@@ -624,7 +601,7 @@ class imageready:
                             NotConnectedException()).json
             return
 
-        resp.text = PropertyResponse(imageReady, req).json
+        resp.text = PropertyResponse(state.imageReady, req).json
 
 
 @before(PreProcessRequest(maxdev))
@@ -694,10 +671,9 @@ class numx:
                             NotConnectedException()).json
             return
 
-        resp.text = PropertyResponse(num_x, req).json
+        resp.text = PropertyResponse(state.num_x, req).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
-        global num_x
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
@@ -710,13 +686,13 @@ class numx:
                             InvalidValueException(f'NumX {numxstr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if nnum_x < 0 or nnum_x > SIZE_X: # FIXME do we need to take binning into account?
+        if nnum_x < 0 or nnum_x > state.SIZE_X: # FIXME do we need to take binning into account?
             resp.text = MethodResponse(req,
                             InvalidValueException(f'NumX {numxstr} is out of bounds.')).json
             return
         try:
             ### DEVICE OPERATION(PARAM) ###
-            num_x = nnum_x
+            state.num_x = nnum_x
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -730,10 +706,9 @@ class numy:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        resp.text = PropertyResponse(num_y, req).json
+        resp.text = PropertyResponse(state.num_y, req).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
-        global num_y
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
@@ -746,13 +721,13 @@ class numy:
                             InvalidValueException(f'NumY {numystr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if nnum_y < 0 or nnum_y > SIZE_Y: # FIXME do we need to take binning into account?
+        if nnum_y < 0 or nnum_y > state.SIZE_Y: # FIXME do we need to take binning into account?
             resp.text = MethodResponse(req,
                             InvalidValueException(f'NumY {numystr} is out of bounds.')).json
             return
         try:
             ### DEVICE OPERATION(PARAM) ###
-            num_y = nnum_y
+            state.num_y = nnum_y
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -910,10 +885,9 @@ class startx:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        resp.text = PropertyResponse(start_x, req).json
+        resp.text = PropertyResponse(state.start_x, req).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
-        global start_x
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
@@ -926,13 +900,13 @@ class startx:
                             InvalidValueException(f'StartX {startxstr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if nstart_x < 0 or nstart_x > SIZE_X:
+        if nstart_x < 0 or nstart_x > state.SIZE_X:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'StartX {startxstr} is out of bounds.')).json
             return
         try:
             ### DEVICE OPERATION(PARAM) ###
-            start_x = nstart_x
+            state.start_x = nstart_x
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -947,10 +921,9 @@ class starty:
                             NotConnectedException()).json
             return
 
-        resp.text = PropertyResponse(start_y, req).json
+        resp.text = PropertyResponse(state.start_y, req).json
 
     def on_put(self, req: Request, resp: Response, devnum: int):
-        global start_y
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
@@ -963,13 +936,13 @@ class starty:
                             InvalidValueException(f'StartY {startystr} not a valid number.')).json
             return
         ### RANGE CHECK AS NEEDED ###       # Raise Alpaca InvalidValueException with details!
-        if nstart_y < 0 or nstart_y > SIZE_Y:
+        if nstart_y < 0 or nstart_y > state.SIZE_Y:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'StartY {startystr} is out of bounds.')).json
             return
         try:
             ### DEVICE OPERATION(PARAM) ###
-            start_y = nstart_y
+            state.start_y = nstart_y
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -990,16 +963,15 @@ class subexposureduration:
 class abortexposure:
 
     def on_put(self, req: Request, resp: Response, devnum: int):
-        global state
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
         try:    
             mutex.acquire()
-            if state == CameraState.EXPOSING:
+            if state.camerastate == CameraState.EXPOSING:
                 picam2.stop_()
-                state = CameraState.IDLE
+                state.camerastate = CameraState.IDLE
                 picam2.start()
             resp.text = MethodResponse(req).json
         except Exception as ex:
@@ -1024,11 +996,6 @@ class startexposure:
 
     def on_put(self, req: Request, resp: Response, devnum: int):
 
-        global state
-        global job
-        global need_restart
-        global last_duration
-
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
@@ -1047,28 +1014,28 @@ class startexposure:
                             InvalidValueException(f'Duration {durationstr} is out of bounds')).json
             return
 
-        if duration != last_duration:
-            last_duration = duration
-            need_restart = True
+        if duration != state.last_duration:
+            state.last_duration = duration
+            state.need_restart = True
 
         try:
             ### DEVICE OPERATION(PARAM) ###
             mutex.acquire()
-            logger.debug("Exposure duration is %f, gain is %d", duration, gainvalue)
+            logger.debug("Exposure duration is %f, gain is %d", duration, state.gainvalue)
 
-            if need_restart:
+            if state.need_restart:
                 picam2.stop_()
                 with picam2.controls as controls:
                     controls.ExposureTime = int(duration * 1e6)
                     controls.AeEnable = False
                     controls.NoiseReductionMode = libcamera.controls.draft.NoiseReductionModeEnum.Off
                     controls.AwbEnable = False
-                    controls.AnalogueGain = gainvalue
+                    controls.AnalogueGain = state.gainvalue
                 picam2.start()
-                need_restart = False
+                state.need_restart = False
 
-            job = picam2.capture_array("raw", signal_function=oncapturefinished)
-            state = CameraState.EXPOSING
+            state.job = picam2.capture_array("raw", signal_function=oncapturefinished)
+            state.camerastate = CameraState.EXPOSING
             # -----------------------------
             resp.text = MethodResponse(req).json
         except Exception as ex:
@@ -1101,7 +1068,7 @@ class connected:
                 mutex.acquire()
                 if not picam2.started:
                     # FIXME hard coded HQ cam
-                    config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': 'SRGGB12','size': (int(SIZE_X / binning), int(SIZE_Y / binning))})
+                    config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': 'SRGGB12','size': (int(state.SIZE_X / state.binning), int(state.SIZE_Y / state.binning))})
                     picam2.configure(config)
                     picam2.start()
                 # ----------------------
