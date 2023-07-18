@@ -187,11 +187,10 @@ class binx:
             if binx != state.binning:
                 # Binning mode has changed, switch camera resolution
                 state.binning = binx
-                with picam2.lock:                
-                    config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
-                    picam2.stop_()
-                    picam2.configure(config)
-                    picam2.start()
+                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
+                picam2.stop()
+                picam2.configure(config)
+                picam2.start()
 
             resp.text = MethodResponse(req).json
         except Exception as ex:
@@ -228,11 +227,10 @@ class biny(binx):
             if binx != state.binning:
                 # Binning mode has changed, switch camera resolution
                 state.binning = binx
-                with picam2.lock:                
-                    config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
-                    picam2.stop_()
-                    picam2.configure(config)
-                    picam2.start()
+                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
+                picam2.stop()
+                picam2.configure(config)
+                picam2.start()
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -527,7 +525,10 @@ class imagearray:
             return
         
         try:
-            array = picam2.wait(state.job).view(np.uint16) * (2 ** (16 - 12))
+            #array = picam2.wait(state.job).view(np.uint16) * (2 ** (16 - 12))
+            # ChatGPT says this is quicker
+            array = picam2.wait(state.job).view(np.uint16) * np.left_shift(1, (16 - 12))
+
             state.imageReady = False # We've grabbed the image now
 
             # Resize array to correct frame size according to max resolution and subframe settings
@@ -936,10 +937,9 @@ class abortexposure:
             return
         try:
             if state.camerastate == CameraState.EXPOSING:
-                with picam2.lock:
-                    picam2.stop_()
-                    state.camerastate = CameraState.IDLE
-                    picam2.start()
+                picam2.stop_()
+                state.camerastate = CameraState.IDLE
+                picam2.start()
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
@@ -988,16 +988,15 @@ class startexposure:
             logger.debug("Exposure duration is %f, gain is %d", duration, state.gainvalue)
 
             if state.need_restart:
-                with picam2.lock:
-                    picam2.stop_()
-                    with picam2.controls as controls:
-                        controls.ExposureTime = int(duration * 1e6)
-                        controls.AeEnable = False
-                        controls.NoiseReductionMode = libcamera.controls.draft.NoiseReductionModeEnum.Off
-                        controls.AwbEnable = False
-                        controls.AnalogueGain = state.gainvalue
-                    picam2.start()
-                    state.need_restart = False
+                picam2.stop()
+                with picam2.controls as controls:
+                    controls.ExposureTime = int(duration * 1e6)
+                    controls.AeEnable = False
+                    controls.NoiseReductionMode = libcamera.controls.draft.NoiseReductionModeEnum.Off
+                    controls.AwbEnable = False
+                    controls.AnalogueGain = state.gainvalue
+                picam2.start()
+                state.need_restart = False
 
             state.job = picam2.capture_array("raw", signal_function=oncapturefinished)
             state.camerastate = CameraState.EXPOSING
@@ -1040,8 +1039,7 @@ class connected:
         else:  
             try:
                 if picam2.started:
-                    with picam2.lock:
-                        picam2.stop_()
+                    picam2.stop()
                 # ----------------------
                 resp.text = MethodResponse(req).json
             except Exception as ex:
