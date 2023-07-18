@@ -26,7 +26,6 @@ import numpy as np
 import threading
 
 logger: Logger = None
-mutex = threading.Lock()
 state = State()
 sensor = None
 
@@ -184,27 +183,21 @@ class binx:
                             InvalidValueException(f'BinX {binxstr} not in range')).json
             return
         try:
-            # Set device mode
-            mutex.acquire()
-            logger.info("acquired mutex")
+            # Set device mode            
             if binx != state.binning:
-                logger.info("state != binning")
                 # Binning mode has changed, switch camera resolution
-                state.binning = binx                
-                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
-                logger.info("New config")
-                picam2.stop_()
-                logger.info("stopped")
-                picam2.configure(config)
-                logger.info("configure")
-                picam2.start()
-                logger.info("start")
+                state.binning = binx
+                with picam2.lock:                
+                    config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
+                    picam2.stop_()
+                    picam2.configure(config)
+                    picam2.start()
+
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
                             DriverException(0x500, 'Camera.Binx failed', ex)).json
-        finally:
-            mutex.release()
+
 
 @before(PreProcessRequest(maxdev))
 class biny(binx):
@@ -231,21 +224,19 @@ class biny(binx):
                             InvalidValueException(f'BinY {binxstr} not in range')).json
             return
         try:
-            # Set device mode
-            mutex.acquire()
+            # Set device mode            
             if binx != state.binning:
                 # Binning mode has changed, switch camera resolution
-                state.binning = binx                
-                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
-                picam2.stop_()
-                picam2.configure(config)
-                picam2.start()
+                state.binning = binx
+                with picam2.lock:                
+                    config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
+                    picam2.stop_()
+                    picam2.configure(config)
+                    picam2.start()
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
                             DriverException(0x500, 'Camera.Biny failed', ex)).json
-        finally:
-            mutex.release()
 
 @before(PreProcessRequest(maxdev))
 class camerastate:
@@ -536,12 +527,8 @@ class imagearray:
             return
         
         try:
-            try:
-                mutex.acquire()
-                array = picam2.wait(state.job).view(np.uint16) * (2 ** (16 - 12))
-                state.imageReady = False # We've grabbed the image now
-            finally:
-                mutex.release()
+            array = picam2.wait(state.job).view(np.uint16) * (2 ** (16 - 12))
+            state.imageReady = False # We've grabbed the image now
 
             # Resize array to correct frame size according to max resolution and subframe settings
             array = array[state.start_y:state.start_y + state.num_y, state.start_x:state.start_x + state.num_x]
@@ -947,18 +934,17 @@ class abortexposure:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:    
-            mutex.acquire()
+        try:
             if state.camerastate == CameraState.EXPOSING:
-                picam2.stop_()
-                state.camerastate = CameraState.IDLE
-                picam2.start()
+                with picam2.lock:
+                    picam2.stop_()
+                    state.camerastate = CameraState.IDLE
+                    picam2.start()
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
                             DriverException(0x500, 'Camera.Abortexposure failed', ex)).json
-        finally:
-            mutex.release()
+
 
 @before(PreProcessRequest(maxdev))
 class pulseguide:
@@ -999,20 +985,19 @@ class startexposure:
             state.need_restart = True
 
         try:
-            ### DEVICE OPERATION(PARAM) ###
-            mutex.acquire()
             logger.debug("Exposure duration is %f, gain is %d", duration, state.gainvalue)
 
             if state.need_restart:
-                picam2.stop_()
-                with picam2.controls as controls:
-                    controls.ExposureTime = int(duration * 1e6)
-                    controls.AeEnable = False
-                    controls.NoiseReductionMode = libcamera.controls.draft.NoiseReductionModeEnum.Off
-                    controls.AwbEnable = False
-                    controls.AnalogueGain = state.gainvalue
-                picam2.start()
-                state.need_restart = False
+                with picam2.lock:
+                    picam2.stop_()
+                    with picam2.controls as controls:
+                        controls.ExposureTime = int(duration * 1e6)
+                        controls.AeEnable = False
+                        controls.NoiseReductionMode = libcamera.controls.draft.NoiseReductionModeEnum.Off
+                        controls.AwbEnable = False
+                        controls.AnalogueGain = state.gainvalue
+                    picam2.start()
+                    state.need_restart = False
 
             state.job = picam2.capture_array("raw", signal_function=oncapturefinished)
             state.camerastate = CameraState.EXPOSING
@@ -1021,8 +1006,6 @@ class startexposure:
         except Exception as ex:
             resp.text = MethodResponse(req,
                             DriverException(0x500, 'Camera.Startexposure failed', ex)).json
-        finally:
-            mutex.release()
 
 @before(PreProcessRequest(maxdev))
 class stopexposure:
@@ -1044,8 +1027,6 @@ class connected:
         # start/stop
         if (conn):
             try:
-                # ----------------------
-                mutex.acquire()
                 if not picam2.started:
                     config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
                     picam2.configure(config)
@@ -1055,18 +1036,14 @@ class connected:
             except Exception as ex:
                 resp.text = MethodResponse(req,
                                 DriverException(0x500, f'{self.__class__.__name__} failed', ex)).json
-            finally:
-                mutex.release()
+
         else:  
             try:
-                # ----------------------
-                mutex.acquire()
                 if picam2.started:
-                    picam2.stop()
+                    with picam2.lock:
+                        picam2.stop_()
                 # ----------------------
                 resp.text = MethodResponse(req).json
             except Exception as ex:
                 resp.text = MethodResponse(req,
                                 DriverException(0x500, f'{self.__class__.__name__} failed', ex)).json
-            finally:
-                mutex.release()
