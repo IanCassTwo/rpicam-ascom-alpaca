@@ -193,7 +193,7 @@ class binx:
                 state.binning = binx                
                 config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
                 logger.info("New config")
-                picam2.stop()
+                picam2.stop_()
                 logger.info("stopped")
                 picam2.configure(config)
                 logger.info("configure")
@@ -237,7 +237,7 @@ class biny(binx):
                 # Binning mode has changed, switch camera resolution
                 state.binning = binx                
                 config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
-                picam2.stop()
+                picam2.stop_()
                 picam2.configure(config)
                 picam2.start()
             resp.text = MethodResponse(req).json
