@@ -541,7 +541,7 @@ class imagearray:
 
                 # Create response
                 logger.debug("Creating ImageArrayResponse")
-                pr = ImageArrayResponse(array, req)
+                pr = ImageArrayResponse(array, req)                
                 resp.data = pr.binary
                 resp.content_type = 'application/imagebytes'
                 logger.debug("Created ImageArrayResponse")
