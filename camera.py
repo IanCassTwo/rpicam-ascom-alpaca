@@ -613,9 +613,8 @@ class maxadu:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-
-         # FIXME no idea but I think this is right, although for a 12bit sensor this would probably be 4095
-        resp.text = PropertyResponse(65535, req).json
+        
+        resp.text = PropertyResponse(sensor.get_max_adu(), req).json
 
 @before(PreProcessRequest(maxdev))
 class maxbinx:
