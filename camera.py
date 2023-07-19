@@ -446,7 +446,7 @@ class gain:
                             InvalidValueException(f'Gain {gainstr} not a valid number.')).json
             return
         ### RANGE CHECK
-        if g < 0 or g > 16:
+        if g < sensor.get_min_gain() or g > sensor.get_max_gain():
                 resp.text = MethodResponse(req,
                             InvalidValueException(f'Gain {gainstr} is out of bounds.')).json
                 return
@@ -483,7 +483,7 @@ class gainmin:
                             NotConnectedException()).json
             return
 
-        resp.text = PropertyResponse(0, req).json
+        resp.text = PropertyResponse(sensor.get_min_gain(), req).json
 
 @before(PreProcessRequest(maxdev))
 class gains:

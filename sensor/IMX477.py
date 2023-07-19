@@ -9,7 +9,8 @@ class IMX477(Sensor):
             3040,                               # Y Resolution 
             2,                                  # Binning. Sensor must have a resolution equal to resolution divided by this number
             1.55,                               # pixel size
-            16,                                 # max gain
+            0,                                  # min gain
+            22,                                 # max gain
             0.00006,                            # min exposure (secs)
             600,                                # max exposure (secs)
             0.469,                              # Electrons per ADU. No idea if this is right or not

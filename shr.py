@@ -65,6 +65,8 @@ import orjson
 from falcon import Request, Response, HTTPBadRequest
 from logging import Logger
 import struct
+import time
+import numpy as np
 
 logger: Logger = None
 #logger = None                   # Safe on Python 3.7 but no intellisense in VSCode etc.
@@ -256,7 +258,29 @@ class ImageArrayResponse(PropertyResponse):
     def binary(self) -> bytes:
         # Return the binary for the Property Response
         if (self.ErrorNumber == 0):
-            return struct.pack(f"<IIIIIIIIIII{str(self.Value.nbytes)}s",
+            start_time = time.perf_counter()
+            logger.info("#### Started binary at %f", start_time)
+
+            # Convert the 2d Numpy array to bytes
+            # This is at least 3x than using Numpy native tobytes(order='c)
+            # 0.5secs vs 1.5secs on a Raspberry Pi 3 for a 4056x3040 array
+            # Recommended by ChatGPT after I asked it to suggest a faster way
+            #
+            # b = self.Value.tobytes(order='c')   # c or f (this is the slow version)
+
+            # Ensure the desired data type and byte order
+            value = self.Value.astype(np.uint16, order='C')
+
+            # Get the underlying data buffer as a ctypes array
+            data_array = np.ctypeslib.as_array(value)
+            data_array = data_array.ravel()
+
+            # Obtain the byte string
+            b = data_array.tobytes(order='C')
+
+            logger.info("#### tobytes %f", time.perf_counter() - start_time)
+
+            s = struct.pack(f"<IIIIIIIIIII{str(self.Value.nbytes)}s",
                 1,                              # Metadata Version = 1
                 self.ErrorNumber,               
                 self.ClientTransactionID,
@@ -268,8 +292,11 @@ class ImageArrayResponse(PropertyResponse):
                 self.Value.shape[0],            # length of column
                 self.Value.shape[1],            # length of rows
                 0,                              # 0 for 2d array
-                self.Value.tobytes(order='c')   # c or f
+                b                               # The bytes of the image
                 )
+            logger.info("#### Packed binary %f", time.perf_counter() - start_time)
+            return s
+
         else:
             error_message = self.ErrorMessage.encode('utf-8')
             return struct.pack(f"<IIIIIIIIIII{len(error_message)}s",
