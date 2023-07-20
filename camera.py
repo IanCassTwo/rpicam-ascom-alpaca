@@ -358,7 +358,7 @@ class electronsperadu:
                             NotConnectedException()).json
             return
         try:
-            resp.text = PropertyResponse(sensor.get_electrons_per_adu(), req).json
+            resp.text = PropertyResponse(sensor.get_electrons_per_adu()[state.gainvalue], req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Electronsperadu failed', ex)).json
@@ -418,7 +418,7 @@ class fullwellcapacity:
                             NotConnectedException()).json
             return
         try:
-            resp.text = PropertyResponse(sensor.get_full_well_capacity(), req).json
+            resp.text = PropertyResponse(sensor.get_full_well_capacity()[state.gainvalue], req).json
         except Exception as ex:
             resp.text = PropertyResponse(None, req,
                             DriverException(0x500, 'Camera.Fullwellcapacity failed', ex)).json

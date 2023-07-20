@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 class Sensor(ABC):
-    def __init__(self, name, size_x, size_y, bits_per_pixel, max_binning, pixel_size, min_gain, max_gain, 
+    def __init__(self, name, size_x, size_y, bits_per_pixel, max_binning, pixel_size, max_gain, 
                  min_exposure, max_exposure, electrons_per_adu, full_well_capacity, raw_format, bayer_pattern):
         self._name = name
         self._size_x = size_x
@@ -9,7 +9,6 @@ class Sensor(ABC):
         self._bits_per_pixel = bits_per_pixel
         self._max_binning = max_binning
         self._pixel_size = pixel_size
-        self._min_gain = min_gain
         self._max_gain = max_gain
         self._min_exposure = min_exposure
         self._max_exposure = max_exposure
@@ -17,6 +16,8 @@ class Sensor(ABC):
         self._full_well_capacity = full_well_capacity
         self._raw_format = raw_format
         self._bayer_pattern = bayer_pattern
+        self._electrons_per_adu = electrons_per_adu
+        self._full_well_capacity = full_well_capacity
 
     def get_name(self):
         return self._name
@@ -34,7 +35,7 @@ class Sensor(ABC):
         return self._pixel_size
 
     def get_min_gain(self):
-        return self._min_gain
+        return 0
 
     def get_max_gain(self):
         return self._max_gain
