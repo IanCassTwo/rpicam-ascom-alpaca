@@ -259,11 +259,11 @@ class ImageArrayResponse(PropertyResponse):
         if (self.ErrorNumber == 0):
 
             # Convert the 2d Numpy array to bytes
-            # This is at least 3x than using Numpy native tobytes(order='c)
+            # This is at least 3x faster than using Numpy native tobytes(order='c)
             # 0.5secs vs 1.5secs on a Raspberry Pi 3 for a 4056x3040 array
             # Recommended by ChatGPT after I asked it to suggest a faster way
             #
-            # b = self.Value.tobytes(order='c')   # c or f (this is the slow version)
+            # b = self.Value.tobytes(order='c')   # this is the original slow version
 
             # Ensure the desired data type and byte order
             value = self.Value.astype(np.uint16, order='C')
