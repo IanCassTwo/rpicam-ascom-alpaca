@@ -255,7 +255,7 @@ def main():
     falc_app.add_route(f'/management/v{API_VERSION}/description', management.description())
     falc_app.add_route(f'/management/v{API_VERSION}/configureddevices', management.configureddevices())
     falc_app.add_route('/setup', setup.svrsetup())
-    falc_app.add_route(f'/setup/v{API_VERSION}/rotator/{{devnum}}/setup', setup.devsetup())
+    falc_app.add_route(f'/setup/v{API_VERSION}/camera/{{devnum}}/setup', setup.devsetup())
 
     #
     # Install the unhandled exception processor. See above,
