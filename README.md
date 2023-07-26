@@ -2,7 +2,7 @@
 
 This is an ASCOM Alpaca driver which lets you use your Raspberry PI HQ camera in Windows based astrophotography software such as NINA or Sharpcap. The ASCOM installation on your PC will communicate over the network with this driver and make it appear like it's plugged in locally. It uses Python with LibCamera2 and AlpycaDevice. It's compatible with any Raspberry Pi running Bullseye Raspbian or later.
 
-This is an alpha version that will only recognise a Raspberry Pi HQ camera. It's been coded to allow easy addition of other cameras.
+Currently, it will only recognise a Raspberry Pi HQ camera, however it's been coded to allow easy addition of other cameras.
 
 It supports 
 * binning
@@ -16,7 +16,7 @@ Tested with:-
 * CCD-Ciel
 * PHD2
 
-*Note, Currently (as of 2.2) NINA always assumes RGGB bayer when it displays in the imaging tab for any ASCOM driver, not just this one. You should change NINA settings to force BGGR for this camera. However, regardless of the settings, the output FITS files will always be correct*
+*Note, Currently (as of 2.2) NINA always assumes RGGB bayer when it displays in the imaging tab for any ASCOM driver, not just this one. You should change NINA settings to force BGGR for HQ camera. However, regardless of the settings, the output FITS files will always be correct*
 
 To get this driver to work, clone this repo onto your Raspberry pi and install the dependencies below.
 
