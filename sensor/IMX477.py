@@ -10,7 +10,7 @@ class IMX477(Sensor):
             16,                                     # Bits per pixel. Note, even though the sensor is 12bits, we're sending as 16
             2,                                      # Binning. Sensor must have a resolution equal to resolution divided by this number
             1.55,                                   # Native pixel size
-            2,                                      # Max gain. Min gain is always zero
+            22,                                     # Max gain. Min gain is always zero
             0.00006,                                # Min exposure (secs)
             600,                                    # Max exposure (secs)
             [4.7,3.7,2.6,2.0,1.4,                   # Electrons per ADU. This should be an array of size 0 to <max gain>.                

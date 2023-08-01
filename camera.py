@@ -445,13 +445,19 @@ class gain:
             resp.text = MethodResponse(req,
                             InvalidValueException(f'Gain {gainstr} not a valid number.')).json
             return
+
         ### RANGE CHECK
-        if g < sensor.get_min_gain() or g > sensor.get_max_gain():
-                resp.text = MethodResponse(req,
-                            InvalidValueException(f'Gain {gainstr} is out of bounds.')).json
-                return
+        # Under some circumstances, NINA sends an invalid gain value, and if we return an InvalidValueException
+        # like we're supposed to, it will get upset and prevent us from setting the gain at all!
+        # Workaround is to clip as appropriate
+
+        if g < sensor.get_min_gain():
+                g = sensor.get_min_gain()
+
+        if g > sensor.get_max_gain():
+                g = sensor.get_max_gain()
+
         try:
-            ### DEVICE OPERATION(PARAM) ###
             if state.gainvalue != g:
                 state.gainvalue = g
                 state.need_restart = True
@@ -468,11 +474,8 @@ class gainmax:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
-        try:
-            resp.text = PropertyResponse(sensor.get_max_gain(), req).json
-        except Exception as ex:
-            resp.text = PropertyResponse(None, req,
-                            DriverException(0x500, 'Camera.Gainmax failed', ex)).json
+
+        resp.text = PropertyResponse(sensor.get_max_gain(), req).json
 
 @before(PreProcessRequest(maxdev))
 class gainmin:
@@ -500,6 +503,7 @@ class hasshutter:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
             return
+
         resp.text = PropertyResponse(False, req).json
 
 
