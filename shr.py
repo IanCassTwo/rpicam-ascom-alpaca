@@ -281,7 +281,7 @@ class ImageArrayResponse(PropertyResponse):
                 self.ClientTransactionID,
                 self.ServerTransactionID,
                 44,                             # DataStart
-                2,                              # ImageElementType = 2 = uint32
+                2,                              # ImageElementType = 2 = int32
                 8,                              # TransmissionElementType = 8 = uint16
                 self.Rank,                      # Rank = 2 = bayer
                 self.Value.shape[0],            # length of column
