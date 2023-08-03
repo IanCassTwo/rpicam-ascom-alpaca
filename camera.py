@@ -68,6 +68,9 @@ def start_camera_device(logger: logger):
     global picam2
     picam2 = Picamera2()
 
+def get_config():
+    return picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
+
 # RESOURCE CONTROLLERS
 @before(PreProcessRequest(maxdev))
 class Action:
@@ -187,9 +190,8 @@ class binx:
             if binx != state.binning:
                 # Binning mode has changed, switch camera resolution
                 state.binning = binx
-                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
                 picam2.stop()
-                picam2.configure(config)
+                picam2.configure(get_config())
                 picam2.start()
 
             resp.text = MethodResponse(req).json
@@ -227,9 +229,8 @@ class biny(binx):
             if binx != state.binning:
                 # Binning mode has changed, switch camera resolution
                 state.binning = binx
-                config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
                 picam2.stop()
-                picam2.configure(config)
+                picam2.configure(get_config())
                 picam2.start()
             resp.text = MethodResponse(req).json
         except Exception as ex:
@@ -529,11 +530,23 @@ class imagearray:
             return
         
         try:
-            #array = picam2.wait(state.job).view(np.uint16) * (2 ** (16 - 12))
-            # ChatGPT says this is quicker
-            array = picam2.wait(state.job).view(np.uint16) * np.left_shift(1, (16 - 12))
+            # Get request
+            request = picam2.wait(state.job)
+
+            # Grab metadata
+            metadata = request.get_metadata()
+
+            # Grab image data
+            array = request.make_array('raw')
+            logger.info("Exposure Time is %s", metadata['ExposureTime'])
 
             state.imageReady = False # We've grabbed the image now
+
+            # Release the request
+            request.release()
+
+            # Reformat the array. ChatGPT optimized this for speed
+            array = array.view(np.uint16) * np.left_shift(1, (16 - 12))
 
             # Resize array to correct frame size according to max resolution and subframe settings
             array = array[state.start_y:state.start_y + state.num_y, state.start_x:state.start_x + state.num_x]
@@ -934,6 +947,7 @@ class subexposureduration:
 class abortexposure:
 
     def on_put(self, req: Request, resp: Response, devnum: int):
+        global picam2
         if not picam2.started:
             resp.text = PropertyResponse(None, req,
                             NotConnectedException()).json
@@ -941,13 +955,16 @@ class abortexposure:
         try:
             if state.camerastate == CameraState.EXPOSING:
                 picam2.stop_()
-                state.camerastate = CameraState.IDLE
+                picam2.stop()
+                picam2.close()
+                picam2 = Picamera2()
+                picam2.configure(get_config())
                 picam2.start()
+                state.camerastate = CameraState.IDLE
             resp.text = MethodResponse(req).json
         except Exception as ex:
             resp.text = MethodResponse(req,
                             DriverException(0x500, 'Camera.Abortexposure failed', ex)).json
-
 
 @before(PreProcessRequest(maxdev))
 class pulseguide:
@@ -1001,7 +1018,7 @@ class startexposure:
                 picam2.start()
                 state.need_restart = False
 
-            state.job = picam2.capture_array("raw", signal_function=oncapturefinished)
+            state.job = picam2.capture_request(signal_function=oncapturefinished)
             state.camerastate = CameraState.EXPOSING
             # -----------------------------
             resp.text = MethodResponse(req).json
@@ -1030,8 +1047,7 @@ class connected:
         if (conn):
             try:
                 if not picam2.started:
-                    config = picam2.create_still_configuration( {"size": (640, 480)}, queue=False, buffer_count=2,  raw={'format': sensor.get_raw_format(),'size': (int(sensor.get_size_x() / state.binning), int(sensor.get_size_y() / state.binning))})
-                    picam2.configure(config)
+                    picam2.configure(get_config())
                     picam2.start()
                 # ----------------------
                 resp.text = MethodResponse(req).json
