@@ -102,6 +102,6 @@ class DiscoveryResponder(Thread):
         while True:
             data, addr = self.rsock.recvfrom(1024)
             datascii = str(data, 'ascii')
-            logger.info(f'Disc rcv {datascii} from {str(addr)}')
+            logger.debug(f'Disc rcv {datascii} from {str(addr)}')
             if 'alpacadiscovery1' in datascii:
                 self.tsock.sendto(self.alpaca_response.encode(), addr)

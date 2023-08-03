@@ -15,6 +15,6 @@ steps_per_sec = 6
 
 [logging]
 log_level = 'INFO'
-log_to_stdout = false
+log_to_stdout = true
 max_size_mb = 50
 num_keep_logs = 10

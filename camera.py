@@ -13,7 +13,7 @@
 # 10/07/2023   Initial edit
 
 from falcon import Request, Response, HTTPBadRequest, before
-from logging import Logger
+import logging
 from shr import ImageArrayResponse, PropertyResponse, MethodResponse, PreProcessRequest, \
                 get_request_field, to_bool #, to_int, to_float
 from exceptions import *        # Nothing but exception
@@ -538,7 +538,11 @@ class imagearray:
 
             # Grab image data
             array = request.make_array('raw')
-            logger.info("Exposure Time is %s", metadata['ExposureTime'])
+
+            # Log the metadata
+            if logger.level == logging.DEBUG:
+                info_str = ', '.join([f'{key}={value}' for key, value in metadata.items()])
+                logger.debug((f"Metadata: {info_str}"))
 
             state.imageReady = False # We've grabbed the image now
 
