@@ -1029,7 +1029,6 @@ class startexposure:
                     controls.NoiseReductionMode = libcamera.controls.draft.NoiseReductionModeEnum.Off
                     controls.AwbEnable = False
                     controls.AnalogueGain = state.gainvalue
-                    logger.info("start_x %d, start_y %d, num_x %d. num_y %d", state.start_x, state.start_y, state.num_x, state.num_y)
                 picam2.start()
                 state.need_restart = False
 
