@@ -329,8 +329,12 @@ class canstopexposure:
 class ccdtemperature:
 
     def on_get(self, req: Request, resp: Response, devnum: int):
-        resp.text = PropertyResponse(None, req,
-                        NotImplementedException()).json
+        if not picam2.started:
+            resp.text = PropertyResponse(None, req,
+                            NotConnectedException()).json
+            return
+
+        resp.text = PropertyResponse(state.temperature, req).json
 
 @before(PreProcessRequest(maxdev))
 class cooleron:
@@ -510,10 +514,10 @@ class hasshutter:
 
 @before(PreProcessRequest(maxdev))
 class heatsinktemperature:
-    # FIXME I think we can get this from image metadata. However, we're not retrieving metadata at the moment
+        
     def on_get(self, req: Request, resp: Response, devnum: int):
         resp.text = PropertyResponse(None, req,
-                NotImplementedException()).json
+                    NotImplementedException()).json
 
 @before(PreProcessRequest(maxdev))
 class imagearray:
@@ -535,6 +539,12 @@ class imagearray:
 
             # Grab metadata
             metadata = request.get_metadata()
+
+            # Update temperature stats
+            try:
+                state.temperature = float(metadata['SensorTemperature'])
+            except ValueError as e:
+                logger.error(e)
 
             # Grab image data
             array = request.make_array('raw')
@@ -1019,6 +1029,7 @@ class startexposure:
                     controls.NoiseReductionMode = libcamera.controls.draft.NoiseReductionModeEnum.Off
                     controls.AwbEnable = False
                     controls.AnalogueGain = state.gainvalue
+                    logger.info("start_x %d, start_y %d, num_x %d. num_y %d", state.start_x, state.start_y, state.num_x, state.num_y)
                 picam2.start()
                 state.need_restart = False
 

@@ -46,3 +46,4 @@ class State:
                 self.start_x = 0
                 self.start_y = 0
                 self.binning = 1
+                self.temperature = 0
