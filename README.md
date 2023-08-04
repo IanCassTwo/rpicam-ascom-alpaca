@@ -8,6 +8,8 @@ It supports
 * binning
 * subframes
 * gain
+* sensor temperature feedback
+* exposure abort
 * imagebytes downloads for better performance
 
 Tested with:-
