@@ -1,4 +1,4 @@
-# Raspberry Pi ASCOM Alpaca driver
+# ASCOM Alpaca driver for Raspberry Pi Camera
 
 This is an ASCOM Alpaca driver which lets you use your Raspberry PI HQ camera in Windows based astrophotography software such as NINA or Sharpcap. The ASCOM installation on your PC will communicate over the network with this driver and make it appear like it's plugged in locally. It uses Python with LibCamera2 and AlpycaDevice. It's compatible with any Raspberry Pi running Bullseye Raspbian or later.
 
